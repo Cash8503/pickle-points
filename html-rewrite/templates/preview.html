@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pickle Points — Preview</title>
+<style>
+  @page { size: letter portrait; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: #888;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20pt 0 40pt;
+    min-height: 100vh;
+  }
+  .page {
+    box-shadow: 0 4pt 20pt rgba(0,0,0,.4);
+    margin-bottom: 0;
+  }
+  .page-screen-gap {
+    height: 20pt;
+    flex: 0 0 auto;
+  }
+  /* Print bar */
+  #printbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #1A1A1A;
+    color: #fff;
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+    font-family: sans-serif;
+    font-size: 13px;
+  }
+  #printbar button {
+    padding: 6px 18px;
+    background: #FFC72C;
+    color: #1A1A1A;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  #printbar .note {
+    font-size: 11px;
+    color: #aaa;
+  }
+  @media print {
+    #printbar, #printbar-spacer, .page-screen-gap { display: none !important; }
+    html, body {
+      background: white !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      display: block !important;
+    }
+    .page {
+      box-shadow: none !important;
+      page-break-after: always;
+      break-after: page;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .page:last-child {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    /* Force browsers to print background colors and images */
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+  [contenteditable]:hover { outline: 1px dashed rgba(0,120,255,.4); cursor: text; }
+  [contenteditable]:focus { outline: 2px solid rgba(0,120,255,.6); background: rgba(0,120,255,.04); }
+</style>
+</head>
+<body>
+<div id="printbar">
+  <button onclick="printFromTop()">Print / Save PDF</button>
+  <span class="note">Click any text on the chart to edit it before printing.</span>
+  <span style="flex:1"></span>
+  <span style="color:#aaa;font-size:11px">{{ total }} page{% if total != 1 %}s{% endif %}</span>
+</div>
+
+<div id="printbar-spacer" style="height:44pt"></div>
+
+{{ pages_html|safe }}
+<script>
+let previewPrintScroll = null;
+
+function preparePrintScroll() {
+  if (!previewPrintScroll) {
+    previewPrintScroll = {
+      x: window.scrollX || 0,
+      y: window.scrollY || 0
+    };
+  }
+  window.scrollTo(0, 0);
+}
+
+function restorePrintScroll() {
+  if (!previewPrintScroll) return;
+  window.scrollTo(previewPrintScroll.x, previewPrintScroll.y);
+  previewPrintScroll = null;
+}
+
+function printFromTop() {
+  preparePrintScroll();
+  requestAnimationFrame(() => {
+    window.print();
+  });
+}
+
+window.addEventListener('beforeprint', preparePrintScroll);
+window.addEventListener('afterprint', restorePrintScroll);
+</script>
+</body>
+</html>

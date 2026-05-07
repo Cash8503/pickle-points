@@ -1,0 +1,336 @@
+{
+  "output_path": "C:\\Users\\CashM\\Desktop\\pickle points\\pickle_points_chart.pdf",
+  "pages": [
+    {
+      "accent": "#DA291C",
+      "items": [
+        {
+          "desc": null,
+          "pickles": 20,
+          "tag": "POPULAR",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/ronald-mcdonald-house-lavender-unisex-t-shirt/",
+            "https://smilemakersonline.com/ronald-mcdonald-house-aqua-unisex-t-shirt/",
+            "https://smilemakersonline.com/ronald-mcdonald-house-lime-unisex-t-shirt/"
+          ]
+        },
+        {
+          "desc": null,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/glitter-arches-cap/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 50,
+          "tag": "POPULAR",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/mens-token-black-jacket/",
+            "https://smilemakersonline.com/ladies-token-black-jacket/"
+          ],
+          "variant_type": "sex"
+        },
+        {
+          "desc": null,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/grimace-fuzzy-socks/"
+          ]
+        },
+        {
+          "desc": null,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/furry-purple-tote/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 16,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-redgrey-cap/",
+            "https://smilemakersonline.com/arches-white-nike-dri-fit-perforated-golf-performance-cap/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 12,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/gold-plated-arches-earrings/",
+            "https://smilemakersonline.com/silver-plated-arches-earrings/"
+          ]
+        },
+        {
+          "name": "RMHC Keychain",
+          "pickles": 10,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/ronald-mcdonald-house-keychain/"
+          ]
+        },
+        {
+          "desc": "Carry your keys and other essentials with the greatest of ease.",
+          "pickles": 10,
+          "tag": "POPULAR",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/mcnugget-pattern-lanyard/",
+            "https://smilemakersonline.com/fry-friends-lanyard/",
+            "https://smilemakersonline.com/mayor-mccheese-lanyard/",
+            "https://smilemakersonline.com/red-arches-lanyard/"
+          ]
+        },
+        {
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-navy-recycled-sling-bag/"
+          ]
+        },
+        {
+          "desc": null,
+          "tag": "POPULAR",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/modern-repeat-navy-hoodie/",
+            "https://smilemakersonline.com/im-lovin-it-big-mac-repeat-hoodie/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 25,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/crochet-burger-beanie/"
+          ]
+        },
+        {
+          "desc": null,
+          "tag": "POPULAR",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/embroidered-arches-cream-textured-throw/"
+          ]
+        },
+        {
+          "desc": null,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/mcnuggets-socks/"
+          ]
+        },
+        {
+          "desc": "Keep it sporty and join the Quarter Pounder crew.",
+          "pickles": 40,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/qpc-icon-crewneck-sweatshirt-sand/",
+            "https://smilemakersonline.com/qpc-icon-crewneck-sweatshirt-red/"
+          ]
+        }
+      ],
+      "layout": {
+        "cols": 4
+      },
+      "section_label": "Classic Merch — Always Available",
+      "subtitle": "Redeem your pickles for crew gear!",
+      "title": "Always Available"
+    },
+    {
+      "accent": "#4A6B1F",
+      "items": [
+        {
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/stacked-fry-friends-neck-tie/"
+          ]
+        },
+        {
+          "desc": null,
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/big-mac-retro-cap/"
+          ]
+        },
+        {
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/fry-friends-post-it-notes-pad-4-pack/"
+          ]
+        },
+        {
+          "desc": "Super soft knit shorts with embroidered red arches. Elastic waist with adjustable drawstring. Unisex fit, S-3XL.",
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-red-lounge-shorts/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 25,
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-red-value-backpack/"
+          ]
+        },
+        {
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/stainless-steel-40-oz-tumbler-with-straw/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 10,
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-mirrored-sunglasses/"
+          ]
+        },
+        {
+          "desc": null,
+          "tag": "LIMITED",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/compact-umbrella-2/"
+          ]
+        },
+        {
+          "desc": null,
+          "name": "Arches Touch Screen Gloves",
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/arches-touch-screen-gloves-in-pouch/"
+          ]
+        }
+      ],
+      "layout": {
+        "cols": 4
+      },
+      "section_label": "Limited Edition — Seasonal Drops",
+      "subtitle": "Seasonal drops — grab them while they last!",
+      "title": "Limited Time Only"
+    },
+    {
+      "accent": "#A71ADD",
+      "items": [
+        {
+          "desc": "Made of 55/45 cotton/polyester blend Embroidered Arches logo",
+          "pickles": 20,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/ladies-red-short-sleeve-event-button-down-2/",
+            "https://smilemakersonline.com/ladies-light-blue-short-sleeve-button-down/",
+            "https://smilemakersonline.com/ladies-purple-short-sleeve-button-down/",
+            "https://smilemakersonline.com/ladies-arches-grey-long-sleeve-poplin-shirt/"
+          ]
+        },
+        {
+          "desc": "Made of 55/45 cotton/polyester blend Embroidered Arches logo",
+          "pickles": 20,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/mens-red-short-sleeve-event-button-down-2/",
+            "https://smilemakersonline.com/mens-light-blue-short-sleeve-button-down/",
+            "https://smilemakersonline.com/mens-purple-short-sleeve-button-down/",
+            "https://smilemakersonline.com/mens-arches-grey-long-sleeve-poplin-shirt/"
+          ]
+        },
+        {
+          "desc": null,
+          "pickles": 8,
+          "type": "smilemakers",
+          "urls": [
+            "https://smilemakersonline.com/pride-heart-neck-tie/"
+          ]
+        }
+      ],
+      "section_label": "Manager Merch — Here for the stay!",
+      "subtitle": "Redeem your pickles for manager gear!",
+      "title": "Managers Apparel"
+    },
+    {
+      "accent": "#0028C7",
+      "earn_headline": "Pickle Points!",
+      "items": [],
+      "layout": {
+        "cols": 4
+      },
+      "notes": [
+        "Being late can disqualify you from earning pickles for that shift.",
+        "Attitude and Appearance must be in good standing.",
+        "Pickles are awarded at managers discretion."
+      ],
+      "reasons": [
+        {
+          "label": "OEPE under 150",
+          "scope": "(DURING PEAK TIMES)",
+          "value": 5
+        },
+        {
+          "label": "KVS under 50",
+          "scope": "(DURING PEAK TIMES)",
+          "value": 5
+        },
+        {
+          "label": "Cleaning Equipment & Stations",
+          "value": 5
+        },
+        {
+          "label": "Fastest store in Charleston 7-7 for the week",
+          "scope": "(WHOLE STORE)",
+          "value": 5
+        },
+        {
+          "label": "On time with no Call Off's for the week",
+          "value": 5
+        },
+        {
+          "label": "Voice Surveys 75% or higher",
+          "scope": "(WHOLE STORE)",
+          "value": 10
+        },
+        {
+          "label": "Sunday's",
+          "type": "multiply",
+          "value": 2
+        }
+      ],
+      "section_label": "",
+      "subtitle": "Earn pickles for free merch!",
+      "title": "How to earn!",
+      "type": "earn"
+    }
+  ],
+  "pdf_title": "Pickle Points — Crew Merch Chart",
+  "settings": {
+    "fetch_concurrency": 6,
+    "pickle_pickle_value": 5,
+    "price_per_pickle": 0.5
+  },
+  "tag_colors": {
+    "LIMITED": {
+      "bg": "#E2F0CE",
+      "text": "#3D6010"
+    },
+    "NEW": {
+      "bg": "#D6F0FF",
+      "text": "#0066A0"
+    },
+    "POPULAR": {
+      "bg": "#FFF0B2",
+      "text": "#A07800"
+    }
+  }
+}
