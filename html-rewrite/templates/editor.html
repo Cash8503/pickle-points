@@ -44,7 +44,13 @@
                     {% for s in switch_stores %}
                     <option
                         value="{{ s }}"
-                        {% if s == store_num %}selected{% endif %}
+                        {%
+                        if
+                        s=""
+                        ="store_num"
+                        %}selected{%
+                        endif
+                        %}
                     >
                         Store #{{ s }}
                     </option>
