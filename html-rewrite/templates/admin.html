@@ -109,7 +109,7 @@ body {
 }
 .action-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* ── Add-user form ── */
+/* ── Inline panel (reused for Create Store) ── */
 .add-user-form {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -122,27 +122,52 @@ body {
   font-size: 11px; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px;
 }
-.add-user-fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
-.add-user-fields .fld { display: flex; flex-direction: column; gap: 4px; }
-.add-user-fields .fld label {
-  font-size: 10px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .5px;
+
+/* ── Modal overlay ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+  padding: 20px;
 }
-.add-user-fields .fld input[type=text] {
-  padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;
-  font-size: 12px; background: #fff; min-width: 0;
+.modal-overlay.open { display: flex; }
+.modal-dialog {
+  background: var(--panel); border-radius: 12px;
+  width: 100%; max-width: 440px;
+  box-shadow: 0 16px 56px rgba(0,0,0,.5);
+  overflow: hidden;
 }
-.add-user-fields .fld-name  { flex: 1 1 140px; }
-.add-user-fields .fld-uname { flex: 1 1 110px; }
-.add-user-fields .fld-stores { flex: 1 1 130px; }
-.add-user-fields .fld-admin { justify-content: flex-end; padding-bottom: 2px; }
-.add-user-fields .fld-admin label {
-  display: flex; align-items: center; gap: 5px; text-transform: none; letter-spacing: 0;
-  font-size: 11px; cursor: pointer;
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
 }
+.modal-head .modal-title { font-size: 14px; font-weight: 800; color: var(--dark); }
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: var(--muted); line-height: 1; padding: 2px 6px;
+  border-radius: 4px;
+}
+.modal-close:hover { background: var(--border); color: var(--dark); }
+.modal-body { padding: 20px; }
+.modal-field { margin-bottom: 14px; }
+.modal-field label {
+  display: block; font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px;
+}
+.modal-field input[type=text] {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 13px; background: #fff;
+}
+.modal-field input[type=text]:focus { outline: none; border-color: var(--pickle); }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px; border-top: 1px solid var(--border);
+}
+
+/* ── Store checklist (shared) ── */
 .store-checklist {
   border: 1px solid var(--border); border-radius: 4px; background: #fff;
-  padding: 6px 8px; max-height: 96px; overflow-y: auto;
+  padding: 6px 8px; max-height: 110px; overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px;
 }
 .store-check-item {
@@ -225,7 +250,6 @@ body {
 @media (max-width: 600px) {
   .store-grid { grid-template-columns: 1fr; }
   .inline-form { flex-wrap: wrap; }
-  .add-user-fields { flex-direction: column; }
   .users-table th:nth-child(3),
   .users-table td:nth-child(3) { display: none; }
 }
@@ -253,39 +277,7 @@ body {
   <div class="section-header" style="margin-top:0">
     <div class="section-title">Users</div>
     <div class="section-count">{{ users|length }} account{{ 's' if users|length != 1 else '' }}</div>
-  </div>
-
-  <div class="add-user-form">
-    <div class="form-title">Add New User</div>
-    <form method="POST" action="/admin/users/create" autocomplete="off">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="add-user-fields">
-        <div class="fld fld-name">
-          <label for="real_name">Full Name</label>
-          <input type="text" id="real_name" name="real_name" placeholder="Jane Smith" spellcheck="false">
-        </div>
-        <div class="fld fld-uname">
-          <label for="username">Username</label>
-          <input type="text" id="username" name="username" placeholder="jsmith" spellcheck="false" autocomplete="off">
-        </div>
-        <div class="fld fld-stores">
-          <label>Stores</label>
-          <div class="store-checklist">
-            {% for s in stores %}
-            <label class="store-check-item">
-              <input type="checkbox" name="stores" value="{{ s.num }}"> Store #{{ s.num }}
-            </label>
-            {% else %}
-            <span class="no-stores-hint">No stores yet — create one below.</span>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="fld fld-admin">
-          <label><input type="checkbox" name="is_admin"> Admin</label>
-        </div>
-        <button type="submit" class="btn btn-edit" style="align-self:flex-end">Add User</button>
-      </div>
-    </form>
+    <button class="btn btn-edit btn-sm" onclick="openUserModal()" style="margin-left:auto">+ Add User</button>
   </div>
 
   {% if users %}
@@ -440,5 +432,61 @@ body {
   {% endif %}
 
 </div>
+<!-- ── Add User Modal ── -->
+<div id="modal-add-user" class="modal-overlay" onclick="if(event.target===this)closeUserModal()">
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <span class="modal-title">Add New User</span>
+      <button class="modal-close" onclick="closeUserModal()" aria-label="Close">&times;</button>
+    </div>
+    <form method="POST" action="/admin/users/create" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="modal-field">
+          <label for="m_real_name">Full Name</label>
+          <input type="text" id="m_real_name" name="real_name" placeholder="Jane Smith" spellcheck="false">
+        </div>
+        <div class="modal-field">
+          <label for="m_username">Username</label>
+          <input type="text" id="m_username" name="username" placeholder="jsmith" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="modal-field">
+          <label>Stores</label>
+          <div class="store-checklist">
+            {% for s in stores %}
+            <label class="store-check-item">
+              <input type="checkbox" name="stores" value="{{ s.num }}"> Store #{{ s.num }}
+            </label>
+            {% else %}
+            <span class="no-stores-hint">No stores yet &mdash; create one first.</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="modal-field" style="margin-bottom:0">
+          <label class="store-check-item" style="font-size:12px;text-transform:none;letter-spacing:0">
+            <input type="checkbox" name="is_admin"> Grant admin access
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeUserModal()">Cancel</button>
+        <button type="submit" class="btn btn-edit">Add User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openUserModal() {
+  document.getElementById('modal-add-user').classList.add('open');
+  document.getElementById('m_real_name').focus();
+}
+function closeUserModal() {
+  document.getElementById('modal-add-user').classList.remove('open');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeUserModal();
+});
+</script>
 </body>
 </html>

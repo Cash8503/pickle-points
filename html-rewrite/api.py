@@ -114,7 +114,8 @@ def register_routes(app):
         expected = session.get("csrf_token", "")
         if not expected or not hmac.compare_digest(token, expected):
             logger.warning("CSRF check failed: path=%s ip=%s", request.path, request.remote_addr)
-            return "Request validation failed.", 403
+            flash("Your session expired. Please try again.", "err")
+            return redirect(request.referrer or url_for("login"))
 
     app.jinja_env.globals["csrf_token"] = lambda: session.get("csrf_token", "")
 

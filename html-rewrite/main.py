@@ -4,6 +4,7 @@ import os
 import threading
 
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from api import register_routes
 from auth_db import init_db
@@ -49,6 +50,7 @@ def create_app():
         return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
     register_routes(app)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     return app
 
 
