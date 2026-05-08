@@ -20,7 +20,34 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   background: var(--bg);
+  color: var(--dark);
   min-height: 100vh;
+}
+body.dark-mode {
+  --dark:   #F4F1EA;
+  --muted:  #B9AC98;
+  --border: #3C352D;
+  --bg:     #141311;
+  --panel:  #1D1B18;
+  color: #ECE7DD;
+}
+body.dark-mode { color-scheme: dark; }
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea {
+  background: #11100F !important;
+  color: #ECE7DD !important;
+  border-color: var(--border) !important;
+}
+body.dark-mode .users-table th,
+body.dark-mode .card-head,
+body.dark-mode #topbar { background: #0E0D0C; }
+body.dark-mode .users-table tr:hover td { background: #24211E; }
+body.dark-mode .btn-outline,
+body.dark-mode .cache-thumb,
+body.dark-mode .store-checklist {
+  background: #11100F;
+  color: #ECE7DD;
 }
 
 /* ── Top bar ── */
@@ -37,10 +64,13 @@ body {
 #topbar h1 span { color: var(--red); }
 #topbar .spacer { flex: 1; }
 .topbar-link {
+  background: transparent;
   font-size: 11px; font-weight: 600; color: #aaa; text-decoration: none;
   padding: 4px 10px; border: 1px solid #444; border-radius: 4px;
+  cursor: pointer;
 }
 .topbar-link:hover { background: #333; color: #fff; }
+.topbar-form { display: flex; }
 
 /* ── Content ── */
 .container { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
@@ -91,6 +121,24 @@ body {
 .users-table tr:hover td { background: #f0ede8; }
 .user-name { font-weight: 700; color: var(--dark); }
 .user-username { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.cache-url-input {
+  width: 100%;
+  min-width: 260px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+.cache-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.cache-thumb {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
 .admin-badge {
   display: inline-block; font-size: 9px; font-weight: 700; padding: 2px 7px;
   background: #FFC72C33; color: #a07800; border-radius: 10px;
@@ -156,7 +204,7 @@ body {
 }
 .modal-field input[type=text] {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border);
-  border-radius: 4px; font-size: 13px; background: #fff;
+  border-radius: 4px; font-size: 13px; background: var(--panel); color: var(--dark);
 }
 .modal-field input[type=text]:focus { outline: none; border-color: var(--pickle); }
 .modal-footer {
@@ -236,12 +284,17 @@ body {
 .inline-form input[type=text], .inline-form input[type=file] {
   flex: 1; min-width: 0;
   padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px;
-  font-size: 11px; background: #fff;
+  font-size: 11px; background: var(--panel); color: var(--dark);
 }
 .inline-form input[type=file] { padding: 3px 6px; }
 .inline-form select {
   flex: 1; padding: 5px 6px; border: 1px solid var(--border);
-  border-radius: 4px; font-size: 11px; background: #fff;
+  border-radius: 4px; font-size: 11px; background: var(--panel); color: var(--dark);
+}
+.notes-ta {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 12px; resize: vertical; font-family: inherit;
+  background: var(--panel); color: var(--dark);
 }
 
 /* Confirm-delete section */
@@ -255,11 +308,16 @@ body {
 }
 </style>
 </head>
-<body>
+<body class="{{ 'dark-mode' if dark_mode else '' }}">
 
 <div id="topbar">
   <h1>&#x1F952; PICKLE POINTS <span>ADMIN</span></h1>
   <div class="spacer"></div>
+  <form class="topbar-form" method="POST" action="/user/dark-mode">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="dark_mode" value="{{ 0 if dark_mode else 1 }}">
+    <button class="topbar-link" type="submit">{{ 'Light Mode' if dark_mode else 'Dark Mode' }}</button>
+  </form>
   <a class="topbar-link" href="/admin/logout">Sign Out</a>
 </div>
 
@@ -333,7 +391,6 @@ body {
   </div>
   {% endif %}
 
-  <!-- ── Stores ── -->
   <div class="section-header">
     <div class="section-title">Stores</div>
     <div class="section-count">{{ stores|length }} store{{ 's' if stores|length != 1 else '' }}</div>
@@ -347,6 +404,15 @@ body {
              spellcheck="false" inputmode="numeric" style="flex:1">
       <button type="submit" class="btn btn-edit">Create</button>
     </form>
+    <div class="form-title" style="margin-top:14px">All Store Configs</div>
+    <div class="action-row">
+      <a class="btn btn-dl" href="/admin/stores/export.zip">Export Zip</a>
+      <form method="POST" action="/admin/stores/import" enctype="multipart/form-data" class="inline-form" style="max-width:420px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="stores_zip" accept=".zip">
+        <button type="submit" class="btn btn-outline">Import Zip</button>
+      </form>
+    </div>
   </div>
 
   {% if not stores %}
@@ -415,14 +481,22 @@ body {
           </form>
         </div>
 
+        <!-- Admin notes -->
+        <div class="action-section">
+          <div class="action-label">Admin Notes</div>
+          <form method="POST" action="/admin/store/{{ s.num }}/notes">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <textarea class="notes-ta" name="notes" rows="3"
+                      placeholder="Internal notes visible only to admins…">{{ s.notes }}</textarea>
+            <button type="submit" class="btn btn-outline btn-sm" style="margin-top:6px">Save Notes</button>
+          </form>
+        </div>
+
         <!-- Delete store -->
         <div class="danger-zone">
           <div class="action-label" style="color:#DA291C">Danger Zone</div>
-          <form method="POST" action="/admin/store/{{ s.num }}/delete"
-                onsubmit="return confirm('Delete Store #{{ s.num }}? This cannot be undone.')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-danger">Delete Store</button>
-          </form>
+          <button type="button" class="btn btn-danger"
+                  onclick="openDeleteModal('{{ s.num }}')">Delete Store</button>
         </div>
 
       </div>
@@ -430,6 +504,80 @@ body {
     {% endfor %}
   </div>
   {% endif %}
+
+  <!-- ── Cache (collapsed) ── -->
+  <div class="section-header" style="cursor:pointer;margin-top:32px;user-select:none" onclick="toggleCache()">
+    <div class="section-title">SmileMakers Cache</div>
+    <div class="section-count">{{ cache_entries|length }} cached URL{{ 's' if cache_entries|length != 1 else '' }}</div>
+    <span id="cache-toggle-icon" style="margin-left:auto;font-size:11px;color:var(--muted);font-weight:600">&#9654; Show</span>
+  </div>
+  <div id="cache-body" style="display:none">
+    <div class="add-user-form" style="margin-bottom:16px">
+      <div class="action-row" style="margin-bottom:12px">
+        <form method="POST" action="/admin/cache/warm-all">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-edit">Warm All Stores</button>
+        </form>
+        <form method="POST" action="/admin/cache/clear-all"
+              onsubmit="return confirm('Clear the entire SmileMakers cache?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger">Clear All Cache</button>
+        </form>
+      </div>
+
+      {% if cache_entries %}
+      <div class="users-wrap" style="margin-bottom:0">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Cached URL</th>
+              <th>Fetched</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in cache_entries %}
+            <tr>
+              <td>
+                {% if entry.image %}<img class="cache-thumb" src="{{ entry.image }}" alt="">{% endif %}
+                <div class="cache-meta">{{ entry.name or 'No title cached' }}</div>
+                {% if entry.price is not none %}<div class="cache-meta">${{ '%.2f'|format(entry.price) }}</div>{% endif %}
+              </td>
+              <td>
+                <form method="POST" action="/admin/cache/refetch-url" class="inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input class="cache-url-input" type="text" name="url" value="{{ entry.url }}" spellcheck="false">
+                  <button type="submit" class="btn btn-outline">Refetch</button>
+                </form>
+              </td>
+              <td>
+                {% if entry.fetched_at %}
+                <span class="cache-meta">{{ entry.fetched_at | int | timestamp_to_str }}</span>
+                {% else %}
+                <span class="cache-meta">Unknown</span>
+                {% endif %}
+              </td>
+              <td>
+                <form method="POST" action="/admin/cache/clear-url">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="url" value="{{ entry.url }}">
+                  <button type="submit" class="btn btn-danger btn-sm">Clear</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:28px 20px">
+        <p>No cached SmileMakers products yet.</p>
+        <small>Warm all stores or fetch products from the editor to populate this list.</small>
+      </div>
+      {% endif %}
+    </div>
+  </div>
 
 </div>
 <!-- ── Add User Modal ── -->
@@ -476,7 +624,68 @@ body {
   </div>
 </div>
 
+<!-- ── Delete Store Modal ── -->
+<div id="modal-delete-store" class="modal-overlay" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <span class="modal-title" style="color:var(--red)">&#x26A0; Delete Store</span>
+      <button class="modal-close" onclick="closeDeleteModal()" aria-label="Close">&times;</button>
+    </div>
+    <form id="delete-store-form" method="POST" action="" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm_store_num" id="delete-confirm-hidden">
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--dark);margin-bottom:12px;line-height:1.5">
+          This will permanently delete <strong id="delete-store-label">Store #?</strong> and all its config data.<br>
+          A backup will be saved first, but this action is not easily reversible.
+        </p>
+        <div class="modal-field">
+          <label for="delete-type-input">Type the store number to confirm</label>
+          <input type="text" id="delete-type-input" placeholder="e.g. 1001"
+                 spellcheck="false" inputmode="numeric" autocomplete="off"
+                 oninput="checkDeleteMatch()">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
+        <button type="submit" id="delete-confirm-btn" class="btn btn-danger" disabled>Delete Store</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
+var _deleteTarget = null;
+
+function openDeleteModal(storeNum) {
+  _deleteTarget = storeNum;
+  document.getElementById('delete-store-label').textContent = 'Store #' + storeNum;
+  document.getElementById('delete-store-form').action = '/admin/store/' + storeNum + '/delete';
+  document.getElementById('delete-type-input').value = '';
+  document.getElementById('delete-confirm-hidden').value = '';
+  document.getElementById('delete-confirm-btn').disabled = true;
+  document.getElementById('modal-delete-store').classList.add('open');
+  setTimeout(function(){ document.getElementById('delete-type-input').focus(); }, 50);
+}
+function closeDeleteModal() {
+  document.getElementById('modal-delete-store').classList.remove('open');
+  _deleteTarget = null;
+}
+function checkDeleteMatch() {
+  var typed = document.getElementById('delete-type-input').value.trim();
+  var match = typed === _deleteTarget;
+  document.getElementById('delete-confirm-hidden').value = match ? typed : '';
+  document.getElementById('delete-confirm-btn').disabled = !match;
+}
+
+function toggleCache() {
+  var body = document.getElementById('cache-body');
+  var icon = document.getElementById('cache-toggle-icon');
+  var open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  icon.innerHTML = open ? '&#9660; Hide' : '&#9654; Show';
+}
+
 function openUserModal() {
   document.getElementById('modal-add-user').classList.add('open');
   document.getElementById('m_real_name').focus();
@@ -485,7 +694,10 @@ function closeUserModal() {
   document.getElementById('modal-add-user').classList.remove('open');
 }
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeUserModal();
+  if (e.key === 'Escape') {
+    closeDeleteModal();
+    closeUserModal();
+  }
 });
 </script>
 </body>

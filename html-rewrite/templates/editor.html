@@ -7,12 +7,13 @@
             content="width=device-width,initial-scale=1,viewport-fit=cover"
         />
         <title>Pickle Points Editor</title>
+        <meta name="csrf-token" content="{{ csrf_token() }}" />
         <link
             rel="stylesheet"
             href="{{ url_for('static', filename='editor.css') }}"
         />
     </head>
-    <body>
+    <body class="{{ 'dark-mode' if dark_mode else '' }}">
         {% if admin_editing %}
         <!-- ADMIN BANNER -->
         <div id="admin-banner">
@@ -34,17 +35,27 @@
             <span id="status">Loading&hellip;</span>
             {% if switch_stores|length > 1 %}
             <form method="POST" action="/pick-store" id="store-switcher">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <select name="store" onchange="this.form.submit()">
-                {% for s in switch_stores %}
-                <option value="{{ s }}"{% if s == store_num %} selected{% endif %}>Store #{{ s }}</option>
-                {% endfor %}
-              </select>
+                <input
+                    type="hidden"
+                    name="csrf_token"
+                    value="{{ csrf_token() }}"
+                />
+                <select name="store" onchange="this.form.submit()">
+                    {% for s in switch_stores %}
+                    <option
+                        value="{{ s }}"
+                        {% if s == store_num %}selected{% endif %}
+                    >
+                        Store #{{ s }}
+                    </option>
+                    {% endfor %}
+                </select>
             </form>
             {% else %}
             <span id="store-badge">Store #{{ store_num }}</span>
-            {% endif %}
-            {% if is_admin %}<a href="/admin" id="btn-admin-panel">Admin Panel</a>{% endif %}
+            {% endif %} {% if is_admin %}<a href="/admin" id="btn-admin-panel"
+                >Admin Panel</a
+            >{% endif %}
             <a href="/logout" id="btn-logout">Sign Out</a>
         </div>
 
@@ -135,6 +146,16 @@
                             oninput="scheduleSettingsSave()"
                         />
                         <div class="hint">Simultaneous URL fetches</div>
+                    </div>
+                    <div class="setting-group">
+                        <label class="check-setting">
+                            <input
+                                type="checkbox"
+                                id="s-dark-mode"
+                                onchange="toggleDarkMode()"
+                            />
+                            Dark mode
+                        </label>
                     </div>
                     <div class="setting-group">
                         <label>PDF Title</label>
@@ -235,11 +256,21 @@
 
                 <div id="items-area">
                     <div class="section-header">Items</div>
+                    <input
+                        type="search"
+                        id="item-filter"
+                        class="list-filter"
+                        placeholder="Filter items"
+                        oninput="filterItems(this.value)"
+                    />
                     <div id="items-list"></div>
                     <div class="btn-row">
                         <button onclick="addSmItem()">+ SM</button>
                         <button onclick="addManualItem()">+ Manual</button>
                         <button onclick="dupItem()">Dup</button>
+                        <button onclick="copyPreviousItemFields()">
+                            Copy Prev
+                        </button>
                         <button onclick="delItem()">Del</button>
                         <button onclick="moveItem(-1)">&uarr;</button>
                         <button onclick="moveItem(1)">&darr;</button>
@@ -303,7 +334,14 @@
                         &#x21BA; Refresh
                     </button>
                     <button
-                        onclick="window.open('/preview', '_blank')"
+                        id="btn-preview-selected"
+                        onclick="toggleSelectedPreview()"
+                        title="Toggle whether preview renders every page or only the selected page"
+                    >
+                        All Pages
+                    </button>
+                    <button
+                        onclick="openPreview()"
                         title="Open printable version"
                     >
                         &#x1F5A8; Print view
@@ -389,6 +427,10 @@
             </div>
         </div>
 
+        <script>
+            window.PICKLE_USER_DARK_MODE = {{ 'true' if dark_mode else 'false' }};
+            window.PICKLE_CSRF_TOKEN = "{{ csrf_token() }}";
+        </script>
         <script src="{{ url_for('static', filename='editor.js') }}"></script>
     </body>
 </html>

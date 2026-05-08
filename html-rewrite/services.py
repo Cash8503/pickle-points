@@ -104,6 +104,23 @@ def clear_cache(url: str = None):
         _write_manifest(manifest)
 
 
+def cache_entries():
+    """Return cached SmileMakers entries for the admin dashboard."""
+    load_disk_cache()
+    with _manifest_lock:
+        entries = []
+        for url, result in _SMILEMAKERS_CACHE.items():
+            fetched_at = _cache_times.get(url)
+            entries.append({
+                "url": url,
+                "fetched_at": fetched_at,
+                "name": result[0] if len(result) > 0 else "",
+                "image": result[2] if len(result) > 2 else "",
+                "price": result[3] if len(result) > 3 else None,
+            })
+        return sorted(entries, key=lambda e: e.get("fetched_at") or 0, reverse=True)
+
+
 def _evict_stale():
     """Drop cache entries older than CACHE_MAX_AGE from memory and the manifest."""
     with _manifest_lock:

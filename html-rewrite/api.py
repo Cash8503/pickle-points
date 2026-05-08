@@ -1,9 +1,11 @@
 import hmac
+import io
 import json
 import logging
 import secrets
 import threading
 import time
+import zipfile
 from collections import defaultdict
 from functools import wraps
 
@@ -12,14 +14,29 @@ from flask import (flash, get_flashed_messages, jsonify, redirect,
 
 from auth_db import (admin_count, check_password, clear_password, create_user,
                      delete_user, get_user, get_user_stores, has_any_admin,
-                     list_users, set_password, update_user)
+                     list_users, set_password, set_user_dark_mode, update_user)
 from config import (audit_log, backup_config, delete_store_config,
                     get_store_metadata, list_store_nums, load_config,
-                    sanitize_store_num, save_config, store_config_exists)
+                    sanitize_store_num, save_config, set_store_notes,
+                    store_config_exists)
+from config_schema import validate_config
 from preview_render import render_preview_html
-from services import fetch_smilemakers_product, prefetch_new_urls, resolve_items_for_preview
+from services import (cache_entries, clear_cache, fetch_smilemakers_product,
+                      prefetch_new_urls, resolve_items_for_preview)
 
 logger = logging.getLogger(__name__)
+
+
+def _smilemakers_urls(cfg):
+    urls = []
+    for page in cfg.get("pages", []):
+        for item in page.get("items", []):
+            if item.get("type") != "smilemakers":
+                continue
+            for url in item.get("urls") or []:
+                if url:
+                    urls.append(url)
+    return urls
 
 # ── Rate limiting ─────────────────────────────────────────────────
 _failed_logins: dict  = defaultdict(list)   # ip -> [timestamp, ...]
@@ -88,6 +105,7 @@ def _do_login(user_id):
     session["username"]  = user["username"]
     session["real_name"] = user["real_name"]
     session["is_admin"]  = bool(user["is_admin"])
+    session["dark_mode"] = bool(user.get("dark_mode"))
     if len(stores) == 1:
         session["store"] = stores[0]
         return redirect(url_for("editor"))
@@ -150,8 +168,9 @@ def register_routes(app):
             return render_template("login.html", step="first_run", error=error)
 
         error = None
-        step  = "username"
-        user_id = None
+        step     = "username"
+        user_id  = None
+        username = None
 
         if request.method == "POST":
             ip     = request.remote_addr
@@ -159,7 +178,8 @@ def register_routes(app):
 
             if _is_rate_limited(ip):
                 error = "Too many failed attempts. Please wait a few minutes and try again."
-                return render_template("login.html", step=step, user_id=user_id, error=error)
+                return render_template("login.html", step=step, user_id=user_id,
+                                       username=username, error=error)
 
             if action == "check_username":
                 uname = request.form.get("username", "").strip()
@@ -168,11 +188,13 @@ def register_routes(app):
                     _record_failed_login(ip)
                     error = "Username not found."
                 elif not user["password_hash"]:
-                    step    = "set_password"
-                    user_id = user["id"]
+                    step     = "set_password"
+                    user_id  = user["id"]
+                    username = user["username"]
                 else:
-                    step    = "password"
-                    user_id = user["id"]
+                    step     = "password"
+                    user_id  = user["id"]
+                    username = user["username"]
 
             elif action == "set_password":
                 user_id  = int(request.form.get("user_id", 0))
@@ -191,6 +213,7 @@ def register_routes(app):
                     error   = "Passwords do not match."
                     step    = "set_password"
                 else:
+                    username = user["username"]
                     set_password(user_id, password)
                     audit_log("password_set", f"user_id={user_id}")
                     _clear_failed_logins(ip)
@@ -199,6 +222,9 @@ def register_routes(app):
             elif action == "login":
                 user_id  = int(request.form.get("user_id", 0))
                 password = request.form.get("password", "")
+                user     = get_user(user_id=user_id)
+                if user:
+                    username = user["username"]
                 if check_password(user_id, password):
                     _clear_failed_logins(ip)
                     return _do_login(user_id)
@@ -206,7 +232,8 @@ def register_routes(app):
                 error = "Incorrect password."
                 step  = "password"
 
-        return render_template("login.html", step=step, user_id=user_id, error=error)
+        return render_template("login.html", step=step, user_id=user_id,
+                               username=username, error=error)
 
     @app.route("/logout")
     def logout():
@@ -221,6 +248,22 @@ def register_routes(app):
     def signout():
         session.clear()
         return redirect(url_for("login"))
+
+    @app.route("/user/dark-mode", methods=["POST"])
+    def user_dark_mode():
+        if "user_id" not in session:
+            if request.headers.get("Accept") == "application/json":
+                return jsonify({"ok": False, "error": "Not logged in"}), 401
+            return redirect(url_for("login"))
+        raw = request.form.get("dark_mode")
+        if raw is None and request.is_json:
+            raw = (request.get_json(silent=True) or {}).get("dark_mode")
+        enabled = str(raw).lower() in {"1", "true", "on", "yes"}
+        set_user_dark_mode(session["user_id"], enabled)
+        session["dark_mode"] = enabled
+        if request.headers.get("Accept") == "application/json" or request.form.get("ajax") == "1":
+            return jsonify({"ok": True, "dark_mode": enabled})
+        return redirect(request.referrer or url_for("editor"))
 
     @app.route("/pick-store", methods=["GET", "POST"])
     def pick_store():
@@ -252,10 +295,14 @@ def register_routes(app):
             switch_stores = sorted(list_store_nums())
         else:
             switch_stores = get_user_stores(session["user_id"])
+        user = get_user(user_id=session["user_id"])
+        dark_mode = bool(user and user.get("dark_mode"))
+        session["dark_mode"] = dark_mode
         return render_template("editor.html",
                                store_num=session["store"],
                                admin_editing=session.get("admin_editing", False),
                                is_admin=session.get("is_admin", False),
+                               dark_mode=dark_mode,
                                switch_stores=switch_stores)
 
     # ── Config API ────────────────────────────────────────────────
@@ -292,6 +339,8 @@ def register_routes(app):
             return jsonify({"error": "No URL provided"}), 400
         try:
             name, desc, image, price, size_variants = fetch_smilemakers_product(url)
+            if not name and not image:
+                return jsonify({"error": "No product info found. Check the URL or try again."}), 502
             sizes = [v["value"] for v in size_variants if v.get("type") == "size"]
             return jsonify({"name": name, "desc": desc, "image": image,
                             "price": price, "sizes": sizes})
@@ -309,6 +358,9 @@ def register_routes(app):
         except Exception as exc:
             logger.error("Preview render failed for store %s: %s", session.get("store"), exc)
             return f"<pre>Error resolving items:\n{exc}</pre>", 500
+        page_idx = request.args.get("page", type=int)
+        if page_idx is not None and 0 <= page_idx < len(pages):
+            pages = [pages[page_idx]]
         return render_preview_html(pages, per_pickle, pickle_value, cfg.get("tag_colors", {}))
 
     @app.route("/preview-frame")
@@ -320,6 +372,9 @@ def register_routes(app):
         except Exception as exc:
             logger.error("Preview frame render failed for store %s: %s", session.get("store"), exc)
             return f"<pre>Error: {exc}</pre>", 500
+        page_idx = request.args.get("page", type=int)
+        if page_idx is not None and 0 <= page_idx < len(pages):
+            pages = [pages[page_idx]]
         return render_preview_html(pages, per_pickle, pickle_value, cfg.get("tag_colors", {}))
 
     # ── Admin dashboard ───────────────────────────────────────────
@@ -332,7 +387,17 @@ def register_routes(app):
             stores.append({"num": num, **meta})
         users = list_users()
         msgs  = get_flashed_messages(with_categories=True)
-        return render_template("admin.html", stores=stores, users=users, messages=msgs)
+        user = get_user(user_id=session["user_id"])
+        dark_mode = bool(user and user.get("dark_mode"))
+        session["dark_mode"] = dark_mode
+        return render_template(
+            "admin.html",
+            stores=stores,
+            users=users,
+            messages=msgs,
+            cache_entries=cache_entries(),
+            dark_mode=dark_mode,
+        )
 
     @app.route("/admin/store/<store_num>/edit")
     @admin_required
@@ -347,6 +412,54 @@ def register_routes(app):
     def admin_back():
         session.pop("store", None)
         session.pop("admin_editing", None)
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/clear-url", methods=["POST"])
+    @admin_required
+    def admin_cache_clear_url():
+        url = request.form.get("url", "").strip()
+        if not url:
+            flash("No cache URL provided.", "err")
+        else:
+            clear_cache(url)
+            audit_log("clear_cache_url", f"by={session.get('username')} url={url}")
+            flash("Cached URL cleared.", "ok")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/refetch-url", methods=["POST"])
+    @admin_required
+    def admin_cache_refetch_url():
+        url = request.form.get("url", "").strip()
+        if not url:
+            flash("No cache URL provided.", "err")
+        else:
+            clear_cache(url)
+            name, _, image, _, _ = fetch_smilemakers_product(url)
+            if name or image:
+                flash("Cached URL refreshed.", "ok")
+            else:
+                flash("URL refetch returned no product data.", "err")
+            audit_log("refetch_cache_url", f"by={session.get('username')} url={url}")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/clear-all", methods=["POST"])
+    @admin_required
+    def admin_cache_clear_all():
+        count = len(cache_entries())
+        clear_cache()
+        audit_log("clear_cache_all", f"by={session.get('username')} count={count}")
+        flash(f"Cleared {count} cache entr{'y' if count == 1 else 'ies'}.", "ok")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/warm-all", methods=["POST"])
+    @admin_required
+    def admin_cache_warm_all():
+        store_nums = list_store_nums()
+        cfgs = [load_config(num) for num in store_nums]
+        for cfg in cfgs:
+            threading.Thread(target=prefetch_new_urls, args=(cfg,), daemon=True).start()
+        audit_log("warm_cache_all", f"by={session.get('username')} stores={len(store_nums)}")
+        flash(f"Started cache warming for {len(store_nums)} store{'' if len(store_nums) == 1 else 's'}.", "ok")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/store/<store_num>/copy-config", methods=["POST"])
@@ -388,7 +501,7 @@ def register_routes(app):
             try:
                 data = f.read(10 * 1024 * 1024)
                 cfg  = json.loads(data.decode("utf-8"))
-                _validate_config(cfg)
+                validate_config(cfg)
                 backup_config(store_num)
                 save_config(cfg, store_num, editor=f"{session.get('real_name', 'Admin')} (Admin)")
                 audit_log("upload_config", f"by={session.get('username')} store={store_num}")
@@ -401,12 +514,17 @@ def register_routes(app):
     @admin_required
     def admin_delete_store(store_num):
         store_num = sanitize_store_num(store_num)
+        confirm   = request.form.get("confirm_store_num", "").strip()
+        if confirm != store_num:
+            flash(f"Store number did not match. Deletion cancelled.", "err")
+            return redirect(url_for("admin_dashboard"))
+        backup_config(store_num)
         delete_store_config(store_num)
         if session.get("store") == store_num:
             session.pop("store", None)
             session.pop("admin_editing", None)
         audit_log("delete_store", f"by={session.get('username')} store={store_num}")
-        flash(f"Store #{store_num} deleted.", "ok")
+        flash(f"Store #{store_num} deleted (backup saved).", "ok")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/stores/create", methods=["POST"])
@@ -422,6 +540,65 @@ def register_routes(app):
         load_config(store_num)
         audit_log("create_store", f"by={session.get('username')} store={store_num}")
         flash(f"Store #{store_num} created.", "ok")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/stores/export.zip")
+    @admin_required
+    def admin_export_stores_zip():
+        buf = io.BytesIO()
+        store_nums = list_store_nums()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            manifest = {"stores": store_nums, "exported_at": time.time()}
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+            for store_num in store_nums:
+                cfg = load_config(store_num)
+                zf.writestr(f"stores/store_{store_num}.json", json.dumps(cfg, indent=2))
+        buf.seek(0)
+        audit_log("export_all_stores", f"by={session.get('username')} count={len(store_nums)}")
+        return Response(
+            buf.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": "attachment; filename=pickle_points_stores.zip"},
+        )
+
+    @app.route("/admin/stores/import", methods=["POST"])
+    @admin_required
+    def admin_import_stores_zip():
+        f = request.files.get("stores_zip")
+        if not f:
+            flash("No zip file selected.", "err")
+            return redirect(url_for("admin_dashboard"))
+        try:
+            data = f.read(25 * 1024 * 1024)
+            imported = 0
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                for name in zf.namelist():
+                    base = name.rsplit("/", 1)[-1]
+                    if not (base.startswith("store_") and base.endswith(".json")):
+                        continue
+                    store_num = sanitize_store_num(base[6:-5])
+                    if not store_num:
+                        continue
+                    cfg = json.loads(zf.read(name).decode("utf-8"))
+                    validate_config(cfg)
+                    if store_config_exists(store_num):
+                        backup_config(store_num)
+                    save_config(cfg, store_num, editor=f"{session.get('real_name', 'Admin')} (Admin import)")
+                    imported += 1
+            audit_log("import_all_stores", f"by={session.get('username')} count={imported}")
+            flash(f"Imported {imported} store config{'' if imported == 1 else 's'}.", "ok")
+        except (zipfile.BadZipFile, json.JSONDecodeError, ValueError, OSError) as exc:
+            flash(f"Import rejected: {exc}", "err")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/store/<store_num>/notes", methods=["POST"])
+    @admin_required
+    def admin_save_store_notes(store_num):
+        store_num = sanitize_store_num(store_num)
+        notes     = request.form.get("notes", "")
+        set_store_notes(store_num, notes)
+        audit_log("save_notes", f"by={session.get('username')} store={store_num}")
+        flash(f"Notes saved for Store #{store_num}.", "ok")
         return redirect(url_for("admin_dashboard"))
 
     # ── Admin user management ─────────────────────────────────────
@@ -520,19 +697,3 @@ def register_routes(app):
         audit_log("delete_user", f"by={session.get('username')} deleted={user['username']}")
         flash(f"User '{user['username']}' deleted.", "ok")
         return redirect(url_for("admin_dashboard"))
-
-
-def _validate_config(cfg):
-    if not isinstance(cfg, dict):
-        raise ValueError("config must be a JSON object")
-    if not isinstance(cfg.get("pages"), list):
-        raise ValueError("missing or invalid 'pages' array")
-    for i, page in enumerate(cfg["pages"]):
-        if not isinstance(page, dict):
-            raise ValueError(f"page {i} is not an object")
-        if not isinstance(page.get("items", []), list):
-            raise ValueError(f"page {i} has invalid 'items'")
-    if "settings" in cfg and not isinstance(cfg["settings"], dict):
-        raise ValueError("'settings' must be an object")
-    if "tag_colors" in cfg and not isinstance(cfg["tag_colors"], dict):
-        raise ValueError("'tag_colors' must be an object")

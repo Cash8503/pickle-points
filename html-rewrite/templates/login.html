@@ -183,7 +183,7 @@ button[type=submit]:hover { background: #3a5518; }
   {# ── Password entry (returning user) ── #}
   {% elif step == "password" %}
   <h2>Enter Password</h2>
-  <p class="step-hint">Signing in as <strong>{{ user_id }}</strong></p>
+  <p class="step-hint">Signing in as <strong>{{ username }}</strong></p>
   <form method="POST" autocomplete="off">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="action" value="login">

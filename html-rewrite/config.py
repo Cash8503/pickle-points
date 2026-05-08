@@ -6,6 +6,8 @@ import sqlite3
 import time
 
 from auth_db import DB_PATH
+from config_schema import (DEFAULT_FETCH_CONCURRENCY, DEFAULT_PICKLE_VALUE,
+                           DEFAULT_PRICE_PER_PICKLE, default_config)
 
 APP_DIR     = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(APP_DIR)
@@ -14,10 +16,6 @@ AUDIT_LOG_PATH = os.path.join(CONFIGS_DIR, "audit.log")
 
 # Legacy JSON directory — scanned once during migration
 _LEGACY_JSON_DIR = CONFIGS_DIR
-
-DEFAULT_FETCH_CONCURRENCY = 5
-DEFAULT_PRICE_PER_PICKLE  = 0.50
-DEFAULT_PICKLE_VALUE      = 1
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +53,11 @@ def store_config_exists(store_num):
 def get_store_metadata(store_num):
     with _db() as conn:
         row = conn.execute(
-            "SELECT config_json, last_edited_at, last_edited_by FROM store_configs WHERE store_num=?",
+            "SELECT config_json, last_edited_at, last_edited_by, notes FROM store_configs WHERE store_num=?",
             (store_num,),
         ).fetchone()
     if not row:
-        return {"last_modified": None, "last_edited_by": None, "item_count": 0, "page_count": 0}
+        return {"last_modified": None, "last_edited_by": None, "item_count": 0, "page_count": 0, "notes": ""}
     try:
         cfg   = json.loads(row["config_json"])
         pages = cfg.get("pages", [])
@@ -68,39 +66,28 @@ def get_store_metadata(store_num):
             "last_edited_by": row["last_edited_by"],
             "item_count":     sum(len(p.get("items", [])) for p in pages),
             "page_count":     len(pages),
+            "notes":          row["notes"] or "",
         }
     except (json.JSONDecodeError, KeyError):
         return {
             "last_modified":  row["last_edited_at"],
             "last_edited_by": row["last_edited_by"],
             "item_count": 0, "page_count": 0,
+            "notes":      row["notes"] or "",
         }
+
+
+def set_store_notes(store_num, notes):
+    with _db() as conn:
+        conn.execute(
+            "UPDATE store_configs SET notes=? WHERE store_num=?",
+            (notes.strip() or None, store_num),
+        )
 
 
 # ── Config load / save ────────────────────────────────────────
 def _default_config():
-    return {
-        "output_path": os.path.join(APP_DIR, "pickle-points-chart.pdf"),
-        "pdf_title": "Pickle Points - Crew Merch Chart",
-        "settings": {
-            "fetch_concurrency": DEFAULT_FETCH_CONCURRENCY,
-            "price_per_pickle":  DEFAULT_PRICE_PER_PICKLE,
-            "pickle_chip_value": DEFAULT_PICKLE_VALUE,
-        },
-        "tag_colors": {
-            "POPULAR": {"bg": "#FFF0B2", "text": "#A07800"},
-            "NEW":     {"bg": "#D6F0FF", "text": "#0066A0"},
-            "LIMITED": {"bg": "#E2F0CE", "text": "#3D6010"},
-        },
-        "pages": [{
-            "title":         "Always Available",
-            "subtitle":      "Redeem your pickles for crew gear!",
-            "section_label": "Classic Merch - Always Available",
-            "accent":        "#DA291C",
-            "items":         [],
-            "layout":        {"cols": 4},
-        }],
-    }
+    return default_config(APP_DIR)
 
 
 def _db_upsert(store_num, cfg):

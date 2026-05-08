@@ -31,6 +31,7 @@ def init_db():
                 real_name     TEXT    NOT NULL,
                 password_hash TEXT,
                 is_admin      INTEGER NOT NULL DEFAULT 0,
+                dark_mode     INTEGER NOT NULL DEFAULT 0,
                 created_at    REAL    NOT NULL
             );
             CREATE TABLE IF NOT EXISTS user_stores (
@@ -52,6 +53,15 @@ def init_db():
                 backed_up_at REAL    NOT NULL
             );
         """)
+        # Migrate existing DBs that predate the notes column
+        try:
+            conn.execute("ALTER TABLE store_configs ADD COLUMN notes TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN dark_mode INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def has_any_admin():
@@ -116,6 +126,14 @@ def check_password(user_id, password):
 def clear_password(user_id):
     with _db() as conn:
         conn.execute("UPDATE users SET password_hash=NULL WHERE id=?", (user_id,))
+
+
+def set_user_dark_mode(user_id, enabled):
+    with _db() as conn:
+        conn.execute(
+            "UPDATE users SET dark_mode=? WHERE id=?",
+            (1 if enabled else 0, user_id),
+        )
 
 
 def update_user(user_id, real_name=None, username=None, is_admin=None, store_nums=None):

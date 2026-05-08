@@ -7,6 +7,9 @@ let itemIdx = null;
 let earnReasonIdx = null;
 let earnNoteIdx = null;
 let selectedTagName = null;
+let previewSelectedOnly = false;
+let itemFilterText = '';
+let userDarkMode = !!window.PICKLE_USER_DARK_MODE;
 
 // ──────────────────────────────────────────────────────────────────
 // Boot
@@ -32,6 +35,72 @@ function setStatus(msg, state) {
   el.style.color = colors[state] ?? (state === true ? colors.err : '#aaa');
 }
 
+function showUndoToast(message, onUndo) {
+  let wrap = document.getElementById('undo-toast-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'undo-toast-wrap';
+    document.body.appendChild(wrap);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'undo-toast';
+  const msg = document.createElement('span');
+  msg.textContent = message;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = 'Undo';
+  toast.appendChild(msg);
+  toast.appendChild(btn);
+  wrap.appendChild(toast);
+  while (wrap.children.length > 3) {
+    wrap.firstElementChild.remove();
+  }
+
+  const close = () => {
+    clearTimeout(timer);
+    toast.remove();
+  };
+  const timer = setTimeout(close, 7000);
+  btn.onclick = () => {
+    close();
+    onUndo();
+  };
+}
+
+function moveInArray(arr, from, to) {
+  if (!arr || from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return false;
+  const [item] = arr.splice(from, 1);
+  arr.splice(to, 0, item);
+  return true;
+}
+
+function wireDragRow(row, listKey, index, onMove) {
+  row.draggable = true;
+  row.addEventListener('dragstart', event => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+    event.dataTransfer.setData('application/x-pickle-list', listKey);
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    row.classList.remove('drag-over');
+  });
+  row.addEventListener('dragover', event => {
+    event.preventDefault();
+    row.classList.add('drag-over');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+  row.addEventListener('drop', event => {
+    event.preventDefault();
+    row.classList.remove('drag-over');
+    if (event.dataTransfer.getData('application/x-pickle-list') !== listKey) return;
+    const from = parseInt(event.dataTransfer.getData('text/plain'), 10);
+    if (Number.isNaN(from)) return;
+    onMove(from, index);
+  });
+}
+
 // ──────────────────────────────────────────────────────────────────
 // Tab switching (left panel)
 // ──────────────────────────────────────────────────────────────────
@@ -47,13 +116,16 @@ function switchTab(name) {
 // ──────────────────────────────────────────────────────────────────
 function populateSettings() {
   const s = cfg.settings || {};
+  // Defaults mirror config_schema.py; saved configs should use the normalized keys.
   document.getElementById('s-price-per-pickle').value =
     s.price_per_pickle ?? s.price_per_point ?? 0.50;
   document.getElementById('s-pickle-value').value =
     s.pickle_chip_value ?? s.pickle_pickle_value ?? s.pickle_point_value ?? 1;
   document.getElementById('s-concurrency').value = s.fetch_concurrency ?? 5;
+  document.getElementById('s-dark-mode').checked = userDarkMode;
   document.getElementById('s-pdf-title').value   = cfg.pdf_title || '';
   document.getElementById('s-output-path').value = cfg.output_path || '';
+  applyTheme();
 }
 
 function collectSettings() {
@@ -67,6 +139,40 @@ function collectSettings() {
   delete cfg.settings.price_per_point;
   delete cfg.settings.pickle_point_value;
   delete cfg.settings.pickle_pickle_value;
+  delete cfg.settings.dark_mode;
+}
+
+function applyTheme() {
+  document.body.classList.toggle('dark-mode', userDarkMode);
+}
+
+function toggleDarkMode() {
+  userDarkMode = !!document.getElementById('s-dark-mode')?.checked;
+  applyTheme();
+  saveDarkModePreference(userDarkMode);
+}
+
+async function saveDarkModePreference(enabled) {
+  const body = new URLSearchParams({
+    csrf_token: window.PICKLE_CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.content || '',
+    dark_mode: enabled ? '1' : '0',
+    ajax: '1',
+  });
+  try {
+    const r = await fetch('/user/dark-mode', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(data.error || 'Theme preference failed to save');
+    setStatus('Theme saved', 'ok');
+  } catch (err) {
+    setStatus(err.message || 'Theme preference failed to save', 'err');
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -80,6 +186,16 @@ function renderPages() {
     div.className = 'page-item' + (i === pageIdx ? ' selected' : '');
     div.textContent = (p.title || `Page ${i+1}`) + (p.type === 'earn' ? ' [earn]' : '');
     div.onclick = () => setPageIdx(i);
+    wireDragRow(div, 'pages', i, (from, to) => {
+      const pages = cfg.pages || [];
+      if (!moveInArray(pages, from, to)) return;
+      pageIdx = to;
+      renderPages();
+      loadPageSettings();
+      renderItems();
+      showNoItem();
+      scheduleSave();
+    });
     el.appendChild(div);
   });
 }
@@ -94,6 +210,7 @@ function setPageIdx(i) {
   loadPageSettings();
   renderItems();
   showNoItem();
+  if (previewSelectedOnly) reloadPreview();
 }
 
 function addPage() {
@@ -109,12 +226,20 @@ function addPage() {
 function delPage() {
   const pages = cfg.pages || [];
   if (!pages.length) return;
-  if (!confirm(`Delete page "${pages[pageIdx]?.title || ''}"?`)) return;
-  pages.splice(pageIdx, 1);
+  const removedIdx = pageIdx;
+  const removedPage = JSON.parse(JSON.stringify(pages[removedIdx]));
+  pages.splice(removedIdx, 1);
   const ni = Math.max(0, pageIdx - 1);
   cfg.pages = pages;
   setPageIdx(ni);
   scheduleSave();
+  showUndoToast(`Deleted page "${removedPage.title || `Page ${removedIdx + 1}`}"`, () => {
+    cfg.pages = cfg.pages || [];
+    const restoreIdx = Math.min(removedIdx, cfg.pages.length);
+    cfg.pages.splice(restoreIdx, 0, removedPage);
+    setPageIdx(restoreIdx);
+    scheduleSave();
+  });
 }
 
 function dupPage() {
@@ -202,10 +327,22 @@ function renderItems() {
   el.innerHTML = '';
   const page = currentPage();
   if (!page) return;
+  const filter = itemFilterText.trim().toLowerCase();
   (page.items || []).forEach((item, i) => {
+    const searchable = itemSearchText(item);
+    if (filter && !searchable.includes(filter)) return;
     const div = document.createElement('div');
     div.className = 'item-row' + (i === itemIdx ? ' selected' : '');
     div.onclick = () => selectItem(i);
+    wireDragRow(div, 'items', i, (from, to) => {
+      const page = currentPage();
+      const items = page && page.items;
+      if (!moveInArray(items, from, to)) return;
+      itemIdx = to;
+      renderItems();
+      buildItemEditor();
+      scheduleSave();
+    });
 
     const badge = document.createElement('span');
     badge.className = 'item-badge ' + (item.type === 'smilemakers' ? 'badge-sm' : 'badge-man');
@@ -213,18 +350,37 @@ function renderItems() {
 
     const name = document.createElement('span');
     name.className = 'item-name';
-    if (item.type === 'smilemakers') {
-      const u = (item.urls || [])[0] || '?';
-      const slug = u.replace(/\/$/, '').split('/').pop();
-      const extra = (item.urls || []).length > 1 ? ` +${item.urls.length-1}` : '';
-      name.textContent = slug + extra + (item.tag ? ` [${item.tag}]` : '');
-    } else {
-      name.textContent = (item.name || '?') + (item.tag ? ` [${item.tag}]` : '');
-    }
+    name.textContent = itemListLabel(item);
     div.appendChild(badge);
     div.appendChild(name);
     el.appendChild(div);
   });
+}
+
+function itemListLabel(item) {
+  if (item.type === 'smilemakers') {
+    const u = (item.urls || [])[0] || '?';
+    const slug = u.replace(/\/$/, '').split('/').pop();
+    const extra = (item.urls || []).length > 1 ? ` +${item.urls.length - 1}` : '';
+    return slug + extra + (item.tag ? ` [${item.tag}]` : '');
+  }
+  return (item.name || '?') + (item.tag ? ` [${item.tag}]` : '');
+}
+
+function itemSearchText(item) {
+  return [
+    itemListLabel(item),
+    item.name,
+    item.desc,
+    item.tag,
+    item.image,
+    ...(item.urls || []),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function filterItems(value) {
+  itemFilterText = value || '';
+  renderItems();
 }
 
 function selectItem(i) {
@@ -259,11 +415,33 @@ function addManualItem() {
 function delItem() {
   const page = currentPage();
   if (!page || itemIdx === null) return;
-  page.items.splice(itemIdx, 1);
-  itemIdx = null;
+  const removedIdx = itemIdx;
+  const removedPageIdx = pageIdx;
+  const removedItem = JSON.parse(JSON.stringify(page.items[removedIdx]));
+  page.items.splice(removedIdx, 1);
+  itemIdx = page.items.length ? Math.max(0, removedIdx - 1) : null;
   renderItems();
-  showNoItem();
+  if (itemIdx === null) {
+    showNoItem();
+  } else {
+    buildItemEditor();
+  }
   scheduleSave();
+  const label = removedItem.name || (removedItem.urls || [])[0] || 'item';
+  showUndoToast(`Deleted ${label}`, () => {
+    const targetPage = (cfg.pages || [])[removedPageIdx];
+    if (!targetPage) return;
+    targetPage.items = targetPage.items || [];
+    const restoreIdx = Math.min(removedIdx, targetPage.items.length);
+    targetPage.items.splice(restoreIdx, 0, removedItem);
+    pageIdx = removedPageIdx;
+    itemIdx = restoreIdx;
+    renderPages();
+    loadPageSettings();
+    renderItems();
+    buildItemEditor();
+    scheduleSave();
+  });
 }
 
 function dupItem() {
@@ -275,6 +453,30 @@ function dupItem() {
   itemIdx = itemIdx + 1;
   renderItems();
   buildItemEditor();
+  scheduleSave();
+}
+
+function copyPreviousItemFields() {
+  const page = currentPage();
+  if (!page || itemIdx === null || itemIdx <= 0) return;
+  const items = page.items || [];
+  const prev = items[itemIdx - 1];
+  const item = items[itemIdx];
+  if (!prev || !item) return;
+
+  ['tag', 'variant_type', 'pickles', 'points', 'price'].forEach(key => {
+    if (prev[key] === undefined || prev[key] === null || prev[key] === '') {
+      delete item[key];
+    } else {
+      item[key] = JSON.parse(JSON.stringify(prev[key]));
+    }
+  });
+  if (prev.variants) {
+    item.variants = JSON.parse(JSON.stringify(prev.variants));
+  }
+  renderItems();
+  buildItemEditor();
+  setStatus('Copied fields from previous item', 'ok');
   scheduleSave();
 }
 
@@ -335,9 +537,10 @@ function buildSmEditor(ed, item) {
           <button onclick="urlReplace()">Replace</button>
           <button onclick="urlRemove()">Remove</button>
           <button onclick="fetchUrlPreview()">Fetch Info</button>
+          <button onclick="fetchAllUrlPreviews()">Fetch All</button>
         </div>
         <div id="fetch-status"></div>
-        <div id="fetched-preview"></div>
+        <div id="fetch-errors">${fetchErrorsHtml(item)}</div>
       </div>
     </div>
     <div class="ed-row">
@@ -397,6 +600,25 @@ function buildSmEditor(ed, item) {
     if (sel.selectedIndex >= 0)
       document.getElementById('url-entry').value = sel.options[sel.selectedIndex].value;
   };
+}
+
+function fetchErrorsHtml(item) {
+  const errors = item.fetch_errors || {};
+  const rows = Object.entries(errors);
+  if (!rows.length) return '';
+  return `
+    <div class="fetch-error-list">
+      ${rows.map(([url, detail]) => `
+        <div class="fetch-error-row">
+          <div>
+            <strong>Fetch failed</strong>
+            <span>${esc((url || '').replace(/\/$/, '').split('/').pop() || url)}</span>
+            <small>${esc(detail.message || 'Unknown error')}</small>
+          </div>
+          <button onclick="retryFetchUrl(decodeURIComponent('${encodeURIComponent(url)}'))">Retry</button>
+        </div>
+      `).join('')}
+    </div>`;
 }
 
 function buildManualEditor(ed, item) {
@@ -485,6 +707,16 @@ function renderEarnReasons() {
     const div = document.createElement('div');
     div.className = 'item-row' + (i === earnReasonIdx ? ' selected' : '');
     div.onclick = () => selectEarnReason(i);
+    wireDragRow(div, 'earn-reasons', i, (from, to) => {
+      const page = currentPage();
+      if (!moveInArray(page && page.reasons, from, to)) return;
+      earnReasonIdx = to;
+      earnNoteIdx = null;
+      renderEarnReasons();
+      renderEarnNotes();
+      buildEarnReasonEditor();
+      scheduleSave();
+    });
     div.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.label || '?')}</span>`
       + `<span style="font-weight:700;color:#DA291C;margin-left:6px">${r.value ?? ''}</span>`;
     el.appendChild(div);
@@ -589,6 +821,16 @@ function renderEarnNotes() {
     const div = document.createElement('div');
     div.className = 'item-row' + (i === earnNoteIdx ? ' selected' : '');
     div.onclick = () => selectEarnNote(i);
+    wireDragRow(div, 'earn-notes', i, (from, to) => {
+      const page = currentPage();
+      if (!moveInArray(page && page.notes, from, to)) return;
+      earnNoteIdx = to;
+      earnReasonIdx = null;
+      renderEarnReasons();
+      renderEarnNotes();
+      buildEarnNoteEditor();
+      scheduleSave();
+    });
     const span = document.createElement('span');
     span.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
     span.textContent = note || '(empty)';
@@ -744,6 +986,7 @@ async function fetchUrlPreview() {
     ? sel.options[sel.selectedIndex].value
     : document.getElementById('url-entry').value.trim();
   if (!u) return;
+  return fetchAndApplyUrl(item, u, 'Fetching');
   const statusEl = document.getElementById('fetch-status');
   statusEl.textContent = 'Fetching\u2026';
   try {
@@ -776,6 +1019,82 @@ async function fetchUrlPreview() {
 // ──────────────────────────────────────────────────────────────────
 // Tag swatches (bottom bar)
 // ──────────────────────────────────────────────────────────────────
+async function fetchAllUrlPreviews() {
+  const page = currentPage();
+  const item = page && itemIdx!==null ? (page.items||[])[itemIdx] : null;
+  if (!item) return;
+  const urls = (item.urls || []).filter(Boolean);
+  if (!urls.length) return;
+  for (let i = 0; i < urls.length; i += 1) {
+    await fetchAndApplyUrl(item, urls[i], `Fetching ${i + 1}/${urls.length}`);
+  }
+  const statusEl = document.getElementById('fetch-status');
+  if (statusEl) statusEl.textContent = `Fetch complete: ${urls.length} URL${urls.length === 1 ? '' : 's'} checked`;
+}
+
+async function retryFetchUrl(url) {
+  const page = currentPage();
+  const item = page && itemIdx!==null ? (page.items||[])[itemIdx] : null;
+  if (!item || !url) return;
+  await fetchAndApplyUrl(item, url, 'Retrying');
+}
+
+async function fetchAndApplyUrl(item, u, label) {
+  const statusEl = document.getElementById('fetch-status');
+  if (statusEl) statusEl.textContent = `${label}: ${(u || '').replace(/\/$/, '').split('/').pop() || u}`;
+  try {
+    const r = await fetch('/api/fetch-product', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url: u})
+    });
+    const d = await r.json();
+    if (d.error) {
+      recordFetchError(item, u, d.error);
+      if (statusEl) statusEl.textContent = 'Error: ' + d.error;
+      return false;
+    }
+    clearFetchError(item, u);
+
+    const nameEl    = document.getElementById('ed-name');
+    const descEl    = document.getElementById('ed-desc');
+    const picklesEl = document.getElementById('ed-pickles');
+    const imageEl   = document.getElementById('ed-image');
+    if (nameEl    && !nameEl.value)    nameEl.placeholder    = d.name  || 'auto';
+    if (descEl    && !descEl.value)    descEl.placeholder    = d.desc  || 'auto';
+    if (picklesEl && !picklesEl.value) picklesEl.placeholder = d.price ? `auto (~${Math.ceil(d.price / (cfg.settings?.price_per_pickle || 0.5))} pickles)` : 'auto';
+    if (imageEl   && !imageEl.value)   imageEl.placeholder   = d.image || 'auto';
+
+    const sizes = d.sizes && d.sizes.length ? `  sizes: ${d.sizes.join(', ')}` : '';
+    if (statusEl) statusEl.textContent = `Fetched OK  $${d.price ? d.price.toFixed(2) : '?'}${sizes}`;
+    return true;
+  } catch(e) {
+    recordFetchError(item, u, 'Network error');
+    if (statusEl) statusEl.textContent = 'Network error';
+    return false;
+  }
+}
+
+function recordFetchError(item, url, message) {
+  item.fetch_errors = item.fetch_errors || {};
+  item.fetch_errors[url] = { message, at: new Date().toISOString() };
+  refreshFetchErrors(item);
+  scheduleSave();
+}
+
+function clearFetchError(item, url) {
+  if (!item.fetch_errors || !item.fetch_errors[url]) return;
+  delete item.fetch_errors[url];
+  if (!Object.keys(item.fetch_errors).length) delete item.fetch_errors;
+  refreshFetchErrors(item);
+  scheduleSave();
+}
+
+function refreshFetchErrors(item) {
+  const el = document.getElementById('fetch-errors');
+  if (el) el.innerHTML = fetchErrorsHtml(item);
+}
+
 function renderTagSwatches() {
   const el = document.getElementById('tag-swatches');
   el.innerHTML = '';
@@ -794,8 +1113,11 @@ function renderTagSwatches() {
 // ──────────────────────────────────────────────────────────────────
 function openTagManager() {
   document.getElementById('tag-modal').style.display = 'flex';
-  selectedTagName = null;
+  selectedTagName = Object.keys(cfg.tag_colors || {})[0] || null;
   renderTagMgrList();
+  if (selectedTagName) {
+    loadTagEditor();
+  }
 }
 
 function closeTagModal(e) {
@@ -863,12 +1185,23 @@ function addTag() {
 
 function deleteTag() {
   if (!selectedTagName) return;
-  if (!confirm(`Delete tag "${selectedTagName}"?`)) return;
-  delete cfg.tag_colors[selectedTagName];
+  const removedTag = selectedTagName;
+  const removedColors = JSON.parse(JSON.stringify(cfg.tag_colors[removedTag]));
+  delete cfg.tag_colors[removedTag];
   selectedTagName = null;
   document.getElementById('tag-edit-title').textContent = 'Select a tag';
   renderTagMgrList();
   renderTagSwatches();
+  scheduleSave();
+  showUndoToast(`Deleted tag "${removedTag}"`, () => {
+    cfg.tag_colors = cfg.tag_colors || {};
+    cfg.tag_colors[removedTag] = removedColors;
+    selectedTagName = removedTag;
+    renderTagMgrList();
+    loadTagEditor();
+    renderTagSwatches();
+    scheduleSave();
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -876,6 +1209,11 @@ function deleteTag() {
 // ──────────────────────────────────────────────────────────────────
 async function saveConfig() {
   collectSettings();
+  const validationErrors = validateSmilemakersUrls();
+  if (validationErrors.length) {
+    setStatus(validationErrors[0], 'err');
+    return;
+  }
   setStatus('Saving\u2026', 'warn');
   try {
     const r = await fetch('/api/config', {
@@ -894,6 +1232,47 @@ async function saveConfig() {
   } catch(e) {
     setStatus('Network error', 'err');
   }
+}
+
+function validateSmilemakersUrls() {
+  const errors = [];
+  const seen = new Map();
+  (cfg.pages || []).forEach((page, pidx) => {
+    (page.items || []).forEach((item, iidx) => {
+      if (item.type !== 'smilemakers') return;
+      const label = `Page ${pidx + 1}, item ${iidx + 1}`;
+      const urls = item.urls || [];
+      if (!urls.length) {
+        errors.push(`${label}: add at least one SmileMakers URL`);
+        return;
+      }
+      urls.forEach((raw, uidx) => {
+        const url = String(raw || '').trim();
+        if (!url) {
+          errors.push(`${label}: URL ${uidx + 1} is empty`);
+          return;
+        }
+        let parsed;
+        try {
+          parsed = new URL(url);
+        } catch(e) {
+          errors.push(`${label}: URL ${uidx + 1} is not a valid URL`);
+          return;
+        }
+        if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes('smilemakersonline.com')) {
+          errors.push(`${label}: URL ${uidx + 1} must be a SmileMakers URL`);
+          return;
+        }
+        const key = parsed.href.replace(/\/$/, '').toLowerCase();
+        if (seen.has(key)) {
+          errors.push(`${label}: duplicate URL also used at ${seen.get(key)}`);
+        } else {
+          seen.set(key, label);
+        }
+      });
+    });
+  });
+  return errors;
 }
 
 // Auto-save: debounce 700ms after any change, then save + refresh preview.
@@ -940,12 +1319,31 @@ function reloadPreview() {
   f.addEventListener('load', () => {
     restorePreviewScroll(f, previousScroll);
   }, { once: true });
-  f.src = '/preview-frame?t=' + Date.now();
-  f.onload = () => { if (s) s.textContent = 'Live preview'; };
+  f.src = previewUrl('/preview-frame');
+  f.onload = () => { if (s) s.textContent = previewSelectedOnly ? 'Selected page preview' : 'Live preview'; };
 }
 
 function openPreview() {
-  window.open('/preview', '_blank');
+  window.open(previewUrl('/preview'), '_blank');
+}
+
+function previewUrl(base) {
+  const params = new URLSearchParams({ t: Date.now().toString() });
+  if (previewSelectedOnly) params.set('page', String(pageIdx));
+  return `${base}?${params.toString()}`;
+}
+
+function toggleSelectedPreview() {
+  previewSelectedOnly = !previewSelectedOnly;
+  updatePreviewModeButton();
+  reloadPreview();
+}
+
+function updatePreviewModeButton() {
+  const btn = document.getElementById('btn-preview-selected');
+  if (!btn) return;
+  btn.classList.toggle('active', previewSelectedOnly);
+  btn.textContent = previewSelectedOnly ? 'Selected Page' : 'All Pages';
 }
 
 function getPreviewScroll(frame) {
