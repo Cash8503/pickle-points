@@ -21,9 +21,13 @@
     box-shadow: 0 4pt 20pt rgba(0,0,0,.4);
     margin-bottom: 0;
   }
-  .page-screen-gap {
-    height: 20pt;
-    flex: 0 0 auto;
+  .page-screen-gap { height: 20pt; flex: 0 0 auto; }
+
+  /* Wrapper that collapses to the scaled visual size */
+  #scaler-wrap {
+    flex-shrink: 0;
+    overflow: hidden;    /* hides the layout overflow of the un-transformed box */
+    transform-style: flat;
   }
   /* Print bar */
   #printbar {
@@ -49,13 +53,12 @@
     font-weight: 700;
     font-size: 13px;
   }
-  #printbar .note {
-    font-size: 11px;
-    color: #aaa;
-  }
+  #printbar .note { font-size: 11px; color: #aaa; }
   @media print {
     #printbar, #printbar-spacer, .page-screen-gap { display: none !important; }
-    #page-scaler { zoom: 1 !important; }
+    /* reset transform for print */
+    #scaler-wrap { width: auto !important; height: auto !important; overflow: visible !important; }
+    #page-scaler { transform: none !important; }
     html, body {
       background: white !important;
       padding: 0 !important;
@@ -69,11 +72,7 @@
       margin: 0 !important;
       padding: 0 !important;
     }
-    .page:last-child {
-      page-break-after: avoid;
-      break-after: avoid;
-    }
-    /* Force browsers to print background colors and images */
+    .page:last-child { page-break-after: avoid; break-after: avoid; }
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -99,27 +98,45 @@
 
 <div id="printbar-spacer" style="height:44pt"></div>
 
-<div id="page-scaler">
-{{ pages_html|safe }}
+<div id="scaler-wrap">
+  <div id="page-scaler">
+  {{ pages_html|safe }}
+  </div>
 </div>
+
 <script>
-// ── Scale-to-fit ──────────────────────────────────────────────
+// ── Scale-to-fit using transform (renders at full res, then scales visually) ──
 (function () {
-  var PAGE_W = 816; // 612pt × (96px ÷ 72pt)
+  var PAGE_W = 816; // 612pt × (96px / 72pt/inch)
   var scaler = document.getElementById('page-scaler');
+  var wrap   = document.getElementById('scaler-wrap');
 
   function applyScale() {
-    if (!scaler) return;
-    var scale = Math.min(1, window.innerWidth / PAGE_W);
-    scaler.style.zoom = scale;
+    if (!scaler || !wrap) return;
+    var avail = window.innerWidth;
+    var scale = Math.min(1, avail / PAGE_W);
+
+    if (scale < 1) {
+      scaler.style.transformOrigin = '0 0';
+      scaler.style.transform = 'scale(' + scale + ')';
+      // Collapse the wrapper to the scaled visual dimensions
+      wrap.style.width  = Math.ceil(PAGE_W * scale) + 'px';
+      wrap.style.height = Math.ceil(scaler.scrollHeight * scale) + 'px';
+    } else {
+      scaler.style.transform = '';
+      wrap.style.width  = '';
+      wrap.style.height = '';
+    }
   }
 
   window.addEventListener('resize', applyScale);
   applyScale();
 
-  // Expose so print handlers can reset/restore
   window._scaleApply = applyScale;
-  window._scaleReset = function () { if (scaler) scaler.style.zoom = ''; };
+  window._scaleReset = function () {
+    if (scaler) scaler.style.transform = '';
+    if (wrap)   { wrap.style.width = ''; wrap.style.height = ''; }
+  };
 })();
 
 // ── Print helpers ─────────────────────────────────────────────
@@ -127,10 +144,7 @@ let previewPrintScroll = null;
 
 function preparePrintScroll() {
   if (!previewPrintScroll) {
-    previewPrintScroll = {
-      x: window.scrollX || 0,
-      y: window.scrollY || 0
-    };
+    previewPrintScroll = { x: window.scrollX || 0, y: window.scrollY || 0 };
   }
   window._scaleReset && window._scaleReset();
   window.scrollTo(0, 0);
@@ -145,13 +159,11 @@ function restorePrintScroll() {
 
 function printFromTop() {
   preparePrintScroll();
-  requestAnimationFrame(() => {
-    window.print();
-  });
+  requestAnimationFrame(() => { window.print(); });
 }
 
 window.addEventListener('beforeprint', preparePrintScroll);
-window.addEventListener('afterprint', restorePrintScroll);
+window.addEventListener('afterprint',  restorePrintScroll);
 </script>
 </body>
 </html>
