@@ -1,6 +1,7 @@
 import io
 import json
 import math
+import queue
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -411,21 +412,51 @@ def prefetch_new_urls(cfg):
 
 
 def warm_cache():
-
-    """Pre-fetch every SmileMakers URL in the config so /preview-frame is instant."""
-    cfg = load_config()
-    urls = []
-    for page in cfg.get("pages", []):
-        for item in page.get("items", []):
-            if item.get("type") == "smilemakers":
-                for u in item.get("urls", []):
-                    if u not in _SMILEMAKERS_CACHE:
-                        urls.append(u)
+    """Pre-fetch every SmileMakers URL across all store configs so /preview-frame is instant."""
+    from config import list_store_nums, load_config as _load
+    store_nums = list_store_nums()
+    all_cfgs = [_load(s) for s in store_nums] if store_nums else [load_config()]
+    seen, urls = set(), []
+    for cfg in all_cfgs:
+        for page in cfg.get("pages", []):
+            for item in page.get("items", []):
+                if item.get("type") == "smilemakers":
+                    for u in (item.get("urls") or []):
+                        if u and u not in _SMILEMAKERS_CACHE and u not in seen:
+                            seen.add(u)
+                            urls.append(u)
     if not urls:
         print("  Cache already warm.")
         return
-    concurrency = cfg.get("settings", {}).get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY)
-    print(f"  Warming cache: {len(urls)} product URL(s)…")
+    concurrency = max(
+        (c.get("settings", {}).get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY) for c in all_cfgs),
+        default=DEFAULT_FETCH_CONCURRENCY,
+    )
+    n_stores = len(all_cfgs)
+    print(f"  Warming {len(urls)} URL(s) across {n_stores} store(s) [{concurrency} workers]")
+
+    id_pool = queue.Queue()
+    for i in range(1, concurrency + 1):
+        id_pool.put(i)
+
+    def _fetch_logged(url):
+        wid = id_pool.get()
+        try:
+            slug = url.rstrip("/").split("/")[-1] or url
+            print(f"  worker {wid}: fetching  {slug}", flush=True)
+            t0 = time.time()
+            result = fetch_smilemakers_product(url)
+            elapsed = time.time() - t0
+            name = (result[0] or "").strip()
+            ok = "✓" if (result[0] or result[2]) else "✗ empty"
+            label = f" — {name[:50]}" if name else ""
+            print(f"  worker {wid}: {ok} {elapsed:.1f}s{label}", flush=True)
+            return result
+        finally:
+            id_pool.put(wid)
+
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        list(pool.map(fetch_smilemakers_product, urls))
-    print(f"  Cache warm — preview will now load instantly.")
+        results = list(pool.map(_fetch_logged, urls))
+
+    succeeded = sum(1 for r in results if r[0] or r[2])
+    print(f"  Cache warm — {succeeded}/{len(urls)} loaded.")
