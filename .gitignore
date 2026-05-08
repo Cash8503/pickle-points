@@ -1,3 +1,9 @@
 old/*
 __pycache__
 .claude
+pickle_points_config.json
+configs/
+.secret_key
+__pycache__
+admin.auth
+*.auth
