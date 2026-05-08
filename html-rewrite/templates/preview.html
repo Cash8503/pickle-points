@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pickle Points — Preview</title>
 <style>
   @page { size: letter portrait; margin: 0; }
@@ -14,6 +15,7 @@
     align-items: center;
     padding: 20pt 0 40pt;
     min-height: 100vh;
+    overflow-x: hidden;
   }
   .page {
     box-shadow: 0 4pt 20pt rgba(0,0,0,.4);
@@ -80,6 +82,11 @@
   }
   [contenteditable]:hover { outline: 1px dashed rgba(0,120,255,.4); cursor: text; }
   [contenteditable]:focus { outline: 2px solid rgba(0,120,255,.6); background: rgba(0,120,255,.04); }
+  @media (max-width: 500px) {
+    #printbar { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+    #printbar .note { display: none; }
+    #printbar button { padding: 8px 14px; font-size: 12px; }
+  }
 </style>
 </head>
 <body>
