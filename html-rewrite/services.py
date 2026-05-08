@@ -1,6 +1,8 @@
 import io
 import json
+import logging
 import math
+import os
 import queue
 import re
 import time
@@ -21,7 +23,122 @@ try:
 except ImportError:
     _PIL_AVAILABLE = False
 
-_SMILEMAKERS_CACHE: dict = {}
+logger = logging.getLogger(__name__)
+
+_APP_DIR       = os.path.dirname(os.path.abspath(__file__))
+_CACHE_DIR     = os.path.join(_APP_DIR, "cache")
+_MANIFEST_PATH = os.path.join(_CACHE_DIR, "smilemakers_manifest.json")
+CACHE_MAX_AGE  = 86_400  # 1 day in seconds
+
+_SMILEMAKERS_CACHE: dict = {}  # url -> (name, desc, image, price, variants)
+_cache_times:       dict = {}  # url -> fetched_at timestamp
+_manifest_lock            = __import__("threading").Lock()
+_disk_cache_loaded        = False
+
+
+def load_disk_cache():
+    """Populate the in-memory cache from the manifest file, evicting stale entries."""
+    global _disk_cache_loaded
+    if _disk_cache_loaded:
+        return
+    with _manifest_lock:
+        if _disk_cache_loaded:
+            return
+        _disk_cache_loaded = True
+        if not os.path.isfile(_MANIFEST_PATH):
+            return
+        try:
+            with open(_MANIFEST_PATH, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load cache manifest: %s", exc)
+            return
+        now   = time.time()
+        fresh = {}
+        stale = 0
+        for url, entry in manifest.items():
+            if now - entry.get("fetched_at", 0) >= CACHE_MAX_AGE:
+                stale += 1
+                continue
+            result = entry.get("result")
+            if not result or len(result) < 5:
+                continue
+            _SMILEMAKERS_CACHE[url] = (result[0], result[1], result[2], result[3], result[4])
+            _cache_times[url]       = entry["fetched_at"]
+            fresh[url]              = entry
+        if stale:
+            _write_manifest(fresh)
+        logger.info("Cache loaded: %d fresh, %d stale evicted", len(fresh), stale)
+
+
+def _write_manifest(data: dict):
+    """Atomically write manifest dict to disk. Call inside _manifest_lock."""
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    tmp = _MANIFEST_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, _MANIFEST_PATH)
+
+
+def _persist_entry(url: str, result: tuple):
+    """Append/update one URL in the on-disk manifest. Thread-safe."""
+    with _manifest_lock:
+        now = time.time()
+        _cache_times[url] = now
+        manifest = {u: {"fetched_at": _cache_times.get(u, now), "result": list(r)}
+                    for u, r in _SMILEMAKERS_CACHE.items()}
+        _write_manifest(manifest)
+
+
+def clear_cache(url: str = None):
+    """Remove one URL from the cache, or clear everything if url is None."""
+    with _manifest_lock:
+        if url:
+            _SMILEMAKERS_CACHE.pop(url, None)
+            _cache_times.pop(url, None)
+        else:
+            _SMILEMAKERS_CACHE.clear()
+            _cache_times.clear()
+        manifest = {u: {"fetched_at": _cache_times.get(u, time.time()), "result": list(r)}
+                    for u, r in _SMILEMAKERS_CACHE.items()}
+        _write_manifest(manifest)
+
+
+def _evict_stale():
+    """Drop cache entries older than CACHE_MAX_AGE from memory and the manifest."""
+    with _manifest_lock:
+        now    = time.time()
+        stale  = [u for u, t in _cache_times.items() if now - t >= CACHE_MAX_AGE]
+        if not stale:
+            return
+        for u in stale:
+            _SMILEMAKERS_CACHE.pop(u, None)
+            _cache_times.pop(u, None)
+        manifest = {u: {"fetched_at": _cache_times[u], "result": list(r)}
+                    for u, r in _SMILEMAKERS_CACHE.items()}
+        _write_manifest(manifest)
+        logger.info("Cache eviction: removed %d stale entry/entries", len(stale))
+
+
+_EVICTION_INTERVAL = 3_600  # check every hour
+
+
+def start_cache_maintenance():
+    """Start a daemon thread that evicts stale cache entries once per hour."""
+    import threading
+
+    def _loop():
+        while True:
+            time.sleep(_EVICTION_INTERVAL)
+            try:
+                _evict_stale()
+            except Exception as exc:
+                logger.error("Cache eviction error: %s", exc)
+
+    t = threading.Thread(target=_loop, name="cache-eviction", daemon=True)
+    t.start()
+    logger.info("Cache maintenance thread started (interval=%ds, max_age=%ds)",
+                _EVICTION_INTERVAL, CACHE_MAX_AGE)
 
 _COLOR_WORDS = {
     "black","white","gray","grey","charcoal","ivory","cream",
@@ -158,6 +275,7 @@ def _first_sentence(text):
     return text[:75] if len(text) > 75 else text
 
 def fetch_smilemakers_product(url):
+    load_disk_cache()
     if url in _SMILEMAKERS_CACHE:
         return _SMILEMAKERS_CACHE[url]
     headers = {
@@ -209,7 +327,7 @@ def fetch_smilemakers_product(url):
                 for script in soup.find_all("script", type="application/ld+json"):
                     try:
                         data = json.loads(script.string or "{}")
-                    except Exception:
+                    except json.JSONDecodeError:
                         continue
                     if isinstance(data, dict) and "offers" in data:
                         offers = data["offers"]
@@ -231,13 +349,18 @@ def fetch_smilemakers_product(url):
         except requests.exceptions.Timeout:
             if attempt < 3:
                 time.sleep(1); continue
-        except Exception:
+        except requests.exceptions.RequestException as exc:
+            logger.error("Fetch failed for %s: %s", url, exc)
+            break
+        except Exception as exc:
+            logger.error("Unexpected fetch error for %s: %s", url, exc, exc_info=True)
             break
 
     # Only cache successful results — a failed/empty fetch must not poison the cache
     # so that the next preview load retries instead of returning blank forever.
     if result[0] or result[2]:  # name or image URL
         _SMILEMAKERS_CACHE[url] = result
+        _persist_entry(url, result)
     return result
 
 def extract_dominant_colors(image_url, n=5):
@@ -264,7 +387,8 @@ def extract_dominant_colors(image_url, n=5):
                 seen.add(hex_col); colors.append(hex_col)
             if len(colors) >= n: break
         return colors
-    except Exception:
+    except Exception as exc:
+        logger.warning("Color extraction failed for %s: %s", image_url, exc)
         return []
 
 def price_to_pickles(price, per_pickle=None, round_up_to=None):
@@ -293,7 +417,7 @@ def resolve_items_for_preview(cfg):
     concurrency  = s.get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY)
     # Read fresh from config every render — do NOT use a module-level constant here.
     per_pickle   = float(s.get("price_per_pickle", s.get("price_per_point", DEFAULT_PRICE_PER_PICKLE)))
-    pickle_value = int(s.get("pickle_pickle_value", s.get("pickle_point_value", DEFAULT_PICKLE_VALUE)))
+    pickle_value = int(s.get("pickle_chip_value", s.get("pickle_pickle_value", s.get("pickle_point_value", DEFAULT_PICKLE_VALUE))))
 
     resolved_pages = []
     for page in cfg.get("pages", []):
@@ -396,6 +520,7 @@ def prefetch_new_urls(cfg):
     """Fetch any SmileMakers URLs in cfg that are not yet cached.
     Intended to run in a background thread immediately after a config save so
     that new items are ready before the next preview reload arrives."""
+    load_disk_cache()
     s = cfg.get("settings", {})
     concurrency = s.get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY)
     urls = []
@@ -413,6 +538,7 @@ def prefetch_new_urls(cfg):
 
 def warm_cache():
     """Pre-fetch every SmileMakers URL across all store configs so /preview-frame is instant."""
+    load_disk_cache()
     from config import list_store_nums, load_config as _load
     store_nums = list_store_nums()
     all_cfgs = [_load(s) for s in store_nums] if store_nums else [load_config()]

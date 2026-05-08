@@ -12,7 +12,7 @@ let selectedTagName = null;
 // Boot
 // ──────────────────────────────────────────────────────────────────
 async function boot() {
-  setStatus('Loading config…');
+  setStatus('Loading config\u2026');
   const r = await fetch('/api/config');
   cfg = await r.json();
   populateSettings();
@@ -25,10 +25,11 @@ async function boot() {
 // ──────────────────────────────────────────────────────────────────
 // Status
 // ──────────────────────────────────────────────────────────────────
-function setStatus(msg, isError) {
+function setStatus(msg, state) {
   const el = document.getElementById('status');
   el.textContent = msg;
-  el.style.color = isError ? '#ff6b6b' : '#aaa';
+  const colors = { ok: '#52b788', warn: '#e8a000', err: '#ff6b6b' };
+  el.style.color = colors[state] ?? (state === true ? colors.err : '#aaa');
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ function populateSettings() {
   document.getElementById('s-price-per-pickle').value =
     s.price_per_pickle ?? s.price_per_point ?? 0.50;
   document.getElementById('s-pickle-value').value =
-    s.pickle_pickle_value ?? s.pickle_point_value ?? 1;
+    s.pickle_chip_value ?? s.pickle_pickle_value ?? s.pickle_point_value ?? 1;
   document.getElementById('s-concurrency').value = s.fetch_concurrency ?? 5;
   document.getElementById('s-pdf-title').value   = cfg.pdf_title || '';
   document.getElementById('s-output-path').value = cfg.output_path || '';
@@ -58,13 +59,14 @@ function populateSettings() {
 function collectSettings() {
   cfg.settings = cfg.settings || {};
   cfg.settings.price_per_pickle   = parseFloat(document.getElementById('s-price-per-pickle').value) || 0.50;
-  cfg.settings.pickle_pickle_value= parseInt(document.getElementById('s-pickle-value').value) || 1;
+  cfg.settings.pickle_chip_value  = parseInt(document.getElementById('s-pickle-value').value) || 1;
   cfg.settings.fetch_concurrency  = parseInt(document.getElementById('s-concurrency').value) || 5;
   cfg.pdf_title   = document.getElementById('s-pdf-title').value.trim();
   cfg.output_path = document.getElementById('s-output-path').value.trim();
   // Remove legacy keys so config stays clean
   delete cfg.settings.price_per_point;
   delete cfg.settings.pickle_point_value;
+  delete cfg.settings.pickle_pickle_value;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -87,6 +89,7 @@ function setPageIdx(i) {
   itemIdx = null;
   earnReasonIdx = null;
   earnNoteIdx = null;
+  closeMobileEdit();
   renderPages();
   loadPageSettings();
   renderItems();
@@ -111,6 +114,16 @@ function delPage() {
   const ni = Math.max(0, pageIdx - 1);
   cfg.pages = pages;
   setPageIdx(ni);
+  scheduleSave();
+}
+
+function dupPage() {
+  const pages = cfg.pages || [];
+  if (!pages.length) return;
+  const copy = JSON.parse(JSON.stringify(pages[pageIdx]));
+  copy.title = 'Copy of ' + (copy.title || `Page ${pageIdx + 1}`);
+  pages.splice(pageIdx + 1, 0, copy);
+  setPageIdx(pageIdx + 1);
   scheduleSave();
 }
 
@@ -218,6 +231,7 @@ function selectItem(i) {
   itemIdx = i;
   renderItems();
   buildItemEditor();
+  openMobileEdit();
 }
 
 function addSmItem() {
@@ -252,6 +266,18 @@ function delItem() {
   scheduleSave();
 }
 
+function dupItem() {
+  const page = currentPage();
+  if (!page || itemIdx === null) return;
+  const copy = JSON.parse(JSON.stringify(page.items[itemIdx]));
+  if (copy.name) copy.name = 'Copy of ' + copy.name;
+  page.items.splice(itemIdx + 1, 0, copy);
+  itemIdx = itemIdx + 1;
+  renderItems();
+  buildItemEditor();
+  scheduleSave();
+}
+
 function moveItem(d) {
   const page = currentPage();
   if (!page || itemIdx === null) return;
@@ -278,6 +304,8 @@ function buildItemEditor() {
   const item = page && itemIdx !== null ? (page.items || [])[itemIdx] : null;
   if (!item) { showNoItem(); return; }
   document.getElementById('no-item-msg').style.display = 'none';
+  const titleEl = document.getElementById('mob-edit-title');
+  if (titleEl) titleEl.textContent = item.name || 'Edit Item';
   const ed = document.getElementById('item-editor');
   ed.style.display = 'block';
   ed.innerHTML = '';
@@ -326,13 +354,13 @@ function buildSmEditor(ed, item) {
       </select>
     </div>
     <hr class="ed-sep">
-    <div class="overrides-note">Overrides — blank = auto from URL &nbsp;<span style="font-weight:400;color:#aaa">(fetch info to see placeholders)</span></div>
+    <div class="overrides-note">Overrides &mdash; blank = auto from URL &nbsp;<span style="font-weight:400;color:#aaa">(fetch info to see placeholders)</span></div>
     <div class="ed-row">
       <label>Name</label>
       <div class="override-wrap">
         <input type="text" id="ed-name" value="${esc(item.name||'')}" placeholder="auto"
                oninput="itemSet('name', this.value||null)">
-        ${item.name ? `<button class="clr-btn" onclick="clearOverride('name','ed-name')" title="Clear override">×</button>` : ''}
+        ${item.name ? `<button class="clr-btn" onclick="clearOverride('name','ed-name')" title="Clear override">&times;</button>` : ''}
       </div>
     </div>
     <div class="ed-row">
@@ -340,7 +368,7 @@ function buildSmEditor(ed, item) {
       <div class="override-wrap">
         <textarea id="ed-desc" placeholder="auto"
                   oninput="itemSet('desc', this.value||null)">${esc(item.desc||'')}</textarea>
-        ${item.desc ? `<button class="clr-btn" onclick="clearOverride('desc','ed-desc')" title="Clear override">×</button>` : ''}
+        ${item.desc ? `<button class="clr-btn" onclick="clearOverride('desc','ed-desc')" title="Clear override">&times;</button>` : ''}
       </div>
     </div>
     <div class="ed-row">
@@ -349,7 +377,7 @@ function buildSmEditor(ed, item) {
         <input type="number" id="ed-pickles" min="0" placeholder="auto"
                value="${item.pickles??item.points??''}"
                oninput="itemSet('pickles', this.value?parseInt(this.value):null)">
-        ${(item.pickles!=null||item.points!=null) ? `<button class="clr-btn" onclick="clearOverride('pickles','ed-pickles')" title="Clear override">×</button>` : ''}
+        ${(item.pickles!=null||item.points!=null) ? `<button class="clr-btn" onclick="clearOverride('pickles','ed-pickles')" title="Clear override">&times;</button>` : ''}
       </div>
     </div>
     <div class="ed-row">
@@ -357,7 +385,7 @@ function buildSmEditor(ed, item) {
       <div class="override-wrap">
         <input type="text" id="ed-image" value="${esc(item.image||'')}" placeholder="auto"
                oninput="itemSet('image', this.value||null)">
-        ${item.image ? `<button class="clr-btn" onclick="clearOverride('image','ed-image')" title="Clear override">×</button>` : ''}
+        ${item.image ? `<button class="clr-btn" onclick="clearOverride('image','ed-image')" title="Clear override">&times;</button>` : ''}
       </div>
     </div>
   `;
@@ -501,7 +529,7 @@ function buildEarnReasonEditor() {
     <div class="ed-row">
       <label>Scope</label>
       <input type="text" id="er-scope" value="${esc(reason.scope || '')}"
-             placeholder="e.g. Whole store, Peaks only…"
+             placeholder="e.g. Whole store, Peaks only\u2026"
              oninput="reasonSet('scope', this.value || null)">
     </div>`;
 }
@@ -717,7 +745,7 @@ async function fetchUrlPreview() {
     : document.getElementById('url-entry').value.trim();
   if (!u) return;
   const statusEl = document.getElementById('fetch-status');
-  statusEl.textContent = 'Fetching…';
+  statusEl.textContent = 'Fetching\u2026';
   try {
     const r = await fetch('/api/fetch-product', {
       method: 'POST',
@@ -848,7 +876,7 @@ function deleteTag() {
 // ──────────────────────────────────────────────────────────────────
 async function saveConfig() {
   collectSettings();
-  setStatus('Saving…');
+  setStatus('Saving\u2026', 'warn');
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -857,14 +885,14 @@ async function saveConfig() {
     });
     const d = await r.json();
     if (d.ok) {
-      setStatus('Saved ✓');
+      setStatus('Saved ✓', 'ok');
       setTimeout(() => setStatus('Ready'), 2500);
       reloadPreview();
     } else {
-      setStatus('Save failed: ' + (d.error || '?'), true);
+      setStatus('Save failed: ' + (d.error || '?'), 'err');
     }
   } catch(e) {
-    setStatus('Network error', true);
+    setStatus('Network error', 'err');
   }
 }
 
@@ -872,7 +900,7 @@ async function saveConfig() {
 let _saveTimer = null;
 function scheduleSave() {
   clearTimeout(_saveTimer);
-  setStatus('Unsaved changes…');
+  setStatus('Unsaved changes\u2026', 'warn');
   _saveTimer = setTimeout(() => saveConfig(), 700);
 }
 
@@ -881,10 +909,10 @@ let _settingsTimer = null;
 async function scheduleSettingsSave() {
   collectSettings();   // update cfg in memory RIGHT NOW so switching items never loses data
   clearTimeout(_settingsTimer);
-  setStatus('Unsaved changes…');
+  setStatus('Unsaved changes\u2026', 'warn');
   _settingsTimer = setTimeout(async () => {
     collectSettings(); // re-collect at write time in case of rapid changes
-    setStatus('Saving…');
+    setStatus('Saving\u2026', 'warn');
     try {
       const r = await fetch('/api/config', {
         method: 'POST',
@@ -893,13 +921,13 @@ async function scheduleSettingsSave() {
       });
       const d = await r.json();
       if (d.ok) {
-        setStatus('Saved ✓');
+        setStatus('Saved ✓', 'ok');
         setTimeout(() => setStatus('Ready'), 2500);
       } else {
-        setStatus('Save failed: ' + (d.error || '?'), true);
+        setStatus('Save failed: ' + (d.error || '?'), 'err');
       }
     } catch(e) {
-      setStatus('Network error', true);
+      setStatus('Network error', 'err');
     }
   }, 900);
 }
@@ -908,7 +936,7 @@ function reloadPreview() {
   const f = document.getElementById('preview-frame');
   const s = document.getElementById('preview-status');
   const previousScroll = getPreviewScroll(f);
-  if (s) s.textContent = 'Refreshing…';
+  if (s) s.textContent = 'Refreshing\u2026';
   f.addEventListener('load', () => {
     restorePreviewScroll(f, previousScroll);
   }, { once: true });
@@ -982,10 +1010,12 @@ function currentPage() {
 // ──────────────────────────────────────────────────────────────────
 // Mobile panel switching
 // ──────────────────────────────────────────────────────────────────
-const PANEL_IDS = ['left-panel', 'center-panel', 'right-panel', 'preview-panel'];
+
+// right-panel is a slide-in overlay, not a regular panel tab
+const PANEL_IDS = ['left-panel', 'center-panel', 'preview-panel'];
 
 function showMobilePanel(panel, btn) {
-  const map = { left: 'left-panel', center: 'center-panel', right: 'right-panel', preview: 'preview-panel' };
+  const map = { left: 'left-panel', center: 'center-panel', preview: 'preview-panel' };
   const targetId = map[panel];
   PANEL_IDS.forEach(id => {
     document.getElementById(id).classList.toggle('mob-hidden', id !== targetId);
@@ -995,11 +1025,31 @@ function showMobilePanel(panel, btn) {
   if (panel === 'preview') reloadPreview();
 }
 
+function openMobileEdit() {
+  if (window.innerWidth > 900) return;
+  // Update title with item name
+  const page = currentPage();
+  const item = page && itemIdx != null ? (page.items || [])[itemIdx] : null;
+  const titleEl = document.getElementById('mob-edit-title');
+  if (titleEl) titleEl.textContent = item?.name || 'Edit Item';
+  document.getElementById('right-panel').classList.add('mob-edit-open');
+}
+
+function closeMobileEdit() {
+  document.getElementById('right-panel').classList.remove('mob-edit-open');
+  // Return to center (Page/Items) panel
+  if (window.innerWidth <= 900) {
+    const centerBtn = document.querySelector('.mob-btn:nth-child(2)');
+    showMobilePanel('center', centerBtn);
+  }
+}
+
 function initMobile() {
   const isMobile = window.innerWidth <= 900;
   if (!isMobile) {
     // Desktop: unhide all panels and clear any drag-set explicit widths
     PANEL_IDS.forEach(id => document.getElementById(id).classList.remove('mob-hidden'));
+    document.getElementById('right-panel').classList.remove('mob-edit-open');
     const right = document.getElementById('right-panel');
     const prev  = document.getElementById('preview-panel');
     right.style.flex = '';
@@ -1008,7 +1058,8 @@ function initMobile() {
     prev.style.width = '';
     return;
   }
-  // Mobile: ensure exactly one panel is visible; default to left (Pages)
+  // Mobile: close edit overlay; ensure exactly one main panel is visible
+  closeMobileEdit();
   const visible = PANEL_IDS.filter(id => !document.getElementById(id).classList.contains('mob-hidden'));
   if (visible.length !== 1) {
     PANEL_IDS.forEach(id => {

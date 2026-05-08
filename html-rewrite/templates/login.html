@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pickle Points — Sign In</title>
+<title>Pickle Points &mdash; Sign In</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -23,175 +23,214 @@ body {
   max-width: 380px;
   box-shadow: 0 12px 48px rgba(0,0,0,.6);
 }
-.brand {
-  text-align: center;
-  margin-bottom: 32px;
-}
+.brand { text-align: center; margin-bottom: 32px; }
 .brand-pill {
-  display: inline-block;
-  background: #1A1A1A;
-  border-bottom: 3px solid #FFC72C;
-  border-radius: 6px;
-  padding: 7px 20px;
-  font-size: 18px;
-  font-weight: 800;
-  color: #FFC72C;
-  letter-spacing: 1px;
+  display: inline-block; background: #1A1A1A;
+  border-bottom: 3px solid #FFC72C; border-radius: 6px;
+  padding: 7px 20px; font-size: 18px; font-weight: 800;
+  color: #FFC72C; letter-spacing: 1px;
 }
 .brand-sub {
-  font-size: 11px;
-  color: #9A8A76;
-  margin-top: 8px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .5px;
+  font-size: 11px; color: #9A8A76; margin-top: 8px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
 }
-h2 {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1A1A1A;
-  margin-bottom: 6px;
-}
-.store-label {
-  font-size: 12px;
-  color: #9A8A76;
-  margin-bottom: 18px;
-}
-.store-label strong { color: #1A1A1A; }
+h2 { font-size: 15px; font-weight: 700; color: #1A1A1A; margin-bottom: 4px; }
+.step-hint { font-size: 12px; color: #9A8A76; margin-bottom: 18px; line-height: 1.4; }
+.step-hint strong { color: #1A1A1A; }
 .field { margin-bottom: 14px; }
 .field label {
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  color: #9A8A76;
-  text-transform: uppercase;
-  letter-spacing: .6px;
-  margin-bottom: 6px;
+  display: block; font-size: 10px; font-weight: 700; color: #9A8A76;
+  text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px;
 }
-.field input[type=text], .field input[type=password] {
-  width: 100%;
-  padding: 11px 14px;
-  border: 2px solid #E8DFC8;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1A1A1A;
-  background: #fff;
-  outline: none;
-  transition: border-color .15s;
+.field input[type=text],
+.field input[type=password] {
+  width: 100%; padding: 11px 14px; border: 2px solid #E8DFC8;
+  border-radius: 6px; font-size: 15px; font-weight: 600; color: #1A1A1A;
+  background: #fff; outline: none; transition: border-color .15s;
 }
-.field input[type=text] { letter-spacing: 2px; font-size: 22px; font-weight: 700; }
-.field input[type=password] { letter-spacing: 3px; }
 .field input:focus { border-color: #4A6B1F; }
-.field input::placeholder { color: #ccc; letter-spacing: 1px; font-weight: 400; font-size: 16px; }
+.field input::placeholder { color: #ccc; font-weight: 400; font-size: 14px; letter-spacing: 0; }
+.field input[type=password] { letter-spacing: 3px; }
+.field input[type=password]::placeholder { letter-spacing: 0; }
+
+/* Password strength bar */
+.pw-strength { margin-top: 6px; }
+.pw-strength-bar {
+  height: 4px; border-radius: 2px; background: #E8DFC8;
+  overflow: hidden; margin-bottom: 4px;
+}
+.pw-strength-fill {
+  height: 100%; width: 0; border-radius: 2px;
+  transition: width .2s, background .2s;
+}
+.pw-strength-label { font-size: 10px; font-weight: 700; color: #9A8A76; letter-spacing: .4px; }
+
 .warning {
-  background: #FFFBEE;
-  border: 1px solid #FFC72C;
-  border-left: 4px solid #FFC72C;
-  border-radius: 4px;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: #5a4a00;
-  margin-bottom: 16px;
-  line-height: 1.5;
+  background: #FFFBEE; border: 1px solid #FFC72C;
+  border-left: 4px solid #FFC72C; border-radius: 4px;
+  padding: 10px 12px; font-size: 12px; color: #5a4a00;
+  margin-bottom: 16px; line-height: 1.5;
 }
 .warning strong { display: block; margin-bottom: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #a07800; }
 .error {
-  background: #fff0f0;
-  border: 1px solid #DA291C;
-  color: #DA291C;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 12px;
-  margin-bottom: 16px;
-  font-weight: 600;
+  background: #fff0f0; border: 1px solid #DA291C; color: #DA291C;
+  border-radius: 4px; padding: 8px 12px; font-size: 12px;
+  margin-bottom: 16px; font-weight: 600;
 }
 button[type=submit] {
-  width: 100%;
-  margin-top: 4px;
-  padding: 13px;
-  background: #4A6B1F;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: .5px;
-  transition: background .12s;
+  width: 100%; margin-top: 4px; padding: 13px;
+  background: #4A6B1F; color: #fff; border: none;
+  border-radius: 6px; font-size: 13px; font-weight: 700;
+  cursor: pointer; letter-spacing: .5px; transition: background .12s;
 }
 button[type=submit]:hover { background: #3a5518; }
 .back-link {
-  display: block;
-  text-align: center;
-  margin-top: 14px;
-  font-size: 11px;
-  color: #9A8A76;
-  text-decoration: none;
+  display: block; text-align: center; margin-top: 14px;
+  font-size: 11px; color: #9A8A76; text-decoration: none;
 }
 .back-link:hover { color: #1A1A1A; }
+.store-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.store-btn {
+  display: block; width: 100%; padding: 12px 16px;
+  background: #fff; border: 2px solid #E8DFC8; border-radius: 8px;
+  font-size: 15px; font-weight: 700; color: #1A1A1A;
+  cursor: pointer; text-align: left; transition: border-color .12s, background .12s;
+}
+.store-btn:hover { border-color: #4A6B1F; background: #f5faf0; }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="brand">
-    <div class="brand-pill">🥒 PICKLE POINTS</div>
+    <div class="brand-pill">&#x1F952; PICKLE POINTS</div>
     <div class="brand-sub">Crew Merch Editor</div>
   </div>
 
   {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
-  {# ── Step 1: store number ── #}
-  {% if step == 1 %}
-  <h2>Enter your store number</h2>
+  {# ── First run: create first admin ── #}
+  {% if step == "first_run" %}
+  <h2>Create Admin Account</h2>
+  <p class="step-hint">No accounts exist yet. Set up the first admin to get started.</p>
+  <div class="warning">
+    <strong>&#x26A0; Admin Setup</strong>
+    This account will have full access to all stores and user management.
+  </div>
   <form method="POST" autocomplete="off">
-    <input type="hidden" name="action" value="check_store">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="setup_admin">
     <div class="field">
-      <label for="store_num">Store Number</label>
-      <input type="text" id="store_num" name="store_num"
-             placeholder="12345" inputmode="numeric"
-             autofocus spellcheck="false">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" placeholder="e.g. jsmith" autofocus spellcheck="false" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="real_name">Your Name</label>
+      <input type="text" id="real_name" name="real_name" placeholder="e.g. Jane Smith" spellcheck="false" autocomplete="name">
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="new-password" oninput="updateStrength(this,'str1','lbl1')">
+      <div class="pw-strength">
+        <div class="pw-strength-bar"><div class="pw-strength-fill" id="str1"></div></div>
+        <div class="pw-strength-label" id="lbl1"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="confirm">Confirm Password</label>
+      <input type="password" id="confirm" name="confirm" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="new-password">
+    </div>
+    <button type="submit">Create Account &amp; Sign In &rarr;</button>
+  </form>
+
+  {# ── Username entry ── #}
+  {% elif step == "username" %}
+  <h2>Sign In</h2>
+  <p class="step-hint">Enter your username to continue.</p>
+  <form method="POST" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="check_username">
+    <div class="field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" placeholder="your username" autofocus spellcheck="false" autocomplete="username">
     </div>
     <button type="submit">Continue &rarr;</button>
   </form>
 
-  {# ── Step 2a: new store — set codeword ── #}
-  {% elif step == 2 and is_new %}
-  <h2>Set a codeword for Store #{{ store_num }}</h2>
-  <p class="store-label">This store has no codeword yet.</p>
-  <div class="warning">
-    <strong>⚠ Heads up</strong>
-    Only share this codeword with managers you trust — anyone who has it
-    can edit and save this store's Pickle Points page.
-  </div>
+  {# ── Set password (first login) ── #}
+  {% elif step == "set_password" %}
+  <h2>Set Your Password</h2>
+  <p class="step-hint">Welcome! This is your first login. Choose a password for your account.</p>
   <form method="POST" autocomplete="off">
-    <input type="hidden" name="action" value="setup_codeword">
-    <input type="hidden" name="store_num" value="{{ store_num }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="set_password">
+    <input type="hidden" name="user_id" value="{{ user_id }}">
     <div class="field">
-      <label for="codeword">Choose a codeword</label>
-      <input type="password" id="codeword" name="codeword"
-             placeholder="••••••••" autofocus autocomplete="new-password">
+      <label for="password">New Password</label>
+      <input type="password" id="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autofocus autocomplete="new-password" oninput="updateStrength(this,'str1','lbl1')">
+      <div class="pw-strength">
+        <div class="pw-strength-bar"><div class="pw-strength-fill" id="str1"></div></div>
+        <div class="pw-strength-label" id="lbl1"></div>
+      </div>
     </div>
-    <button type="submit">Set Codeword &amp; Open Editor &rarr;</button>
+    <div class="field">
+      <label for="confirm">Confirm Password</label>
+      <input type="password" id="confirm" name="confirm" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="new-password">
+    </div>
+    <button type="submit">Set Password &amp; Sign In &rarr;</button>
   </form>
-  <a class="back-link" href="/login">&larr; Use a different store number</a>
+  <a class="back-link" href="/login">&larr; Use a different username</a>
 
-  {# ── Step 2b: existing store — verify codeword ── #}
-  {% else %}
-  <h2>Enter your codeword</h2>
-  <p class="store-label">Store <strong>#{{ store_num }}</strong></p>
+  {# ── Password entry (returning user) ── #}
+  {% elif step == "password" %}
+  <h2>Enter Password</h2>
+  <p class="step-hint">Signing in as <strong>{{ user_id }}</strong></p>
   <form method="POST" autocomplete="off">
-    <input type="hidden" name="action" value="verify_codeword">
-    <input type="hidden" name="store_num" value="{{ store_num }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="login">
+    <input type="hidden" name="user_id" value="{{ user_id }}">
     <div class="field">
-      <label for="codeword">Codeword</label>
-      <input type="password" id="codeword" name="codeword"
-             placeholder="••••••••" autofocus autocomplete="current-password">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;" autofocus autocomplete="current-password">
     </div>
-    <button type="submit">Open Editor &rarr;</button>
+    <button type="submit">Sign In &rarr;</button>
   </form>
-  <a class="back-link" href="/login">&larr; Use a different store number</a>
+  <a class="back-link" href="/login">&larr; Use a different username</a>
+
+  {# ── Store picker (multi-store users) ── #}
+  {% elif step == "pick_store" %}
+  <h2>Choose a Store</h2>
+  <p class="step-hint">You have access to multiple stores. Which one would you like to edit?</p>
+  <form method="POST" action="/pick-store">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="store-list">
+      {% for s in stores %}
+      <button type="submit" name="store" value="{{ s }}" class="store-btn">
+        Store #{{ s }}
+      </button>
+      {% endfor %}
+    </div>
+  </form>
+  <a class="back-link" href="/signout">Sign out</a>
+
   {% endif %}
 </div>
+<script>
+var _levels = [
+  { max: 5,  w: "20%",  bg: "#DA291C", label: "Too short"  },
+  { max: 7,  w: "40%",  bg: "#e8a000", label: "Weak"       },
+  { max: 11, w: "65%",  bg: "#FFC72C", label: "Fair"       },
+  { max: 999,w: "100%", bg: "#4A6B1F", label: "Strong"     },
+];
+function updateStrength(input, barId, labelId) {
+  var len  = input.value.length;
+  var lvl  = _levels.find(function(l){ return len <= l.max; });
+  var fill = document.getElementById(barId);
+  var lbl  = document.getElementById(labelId);
+  fill.style.width      = len ? lvl.w  : "0";
+  fill.style.background = lvl.bg;
+  lbl.textContent       = len ? lvl.label : "";
+  lbl.style.color       = lvl.bg;
+}
+</script>
 </body>
 </html>

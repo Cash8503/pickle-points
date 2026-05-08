@@ -87,7 +87,7 @@ def _variant_swatches_html(variants):
             [v["value"] for v in size_vs],
             key=lambda s: SIZE_ORDER.index(s) if s in SIZE_ORDER else 99
         )
-        label = f'{ordered[0]} – {ordered[-1]}' if len(ordered) > 1 else ordered[0]
+        label = f'{ordered[0]} &ndash; {ordered[-1]}' if len(ordered) > 1 else ordered[0]
         parts.append(
             f'<span style="flex-shrink:0;background:#f8f8f8;border:0.4pt solid #bbb;'
             f'border-radius:4pt;padding:0.5pt 4pt;font-size:5pt;font-weight:700;'
@@ -190,9 +190,9 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
 
         if r_type == 'multiply':
             if isinstance(value, (int, float)) and value > 0:
-                top_text = f'×{int(value)}'
+                top_text = f'&times;{int(value)}'
             else:
-                top_text = f'×{value} POINTS' if value else '×?'
+                top_text = f'&times;{value} POINTS' if value else '&times;?'
             top_size  = '13pt'
             bot_text  = scope or 'EVERYBODY WINS!'
             val_color = accent
@@ -233,7 +233,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
     notes_top = after_reasons + 24
     notes_html = ''.join(
         f'<div style="position:absolute;top:{notes_top + i * 16}pt;left:{M}pt;right:{M}pt;'
-        f'font-size:7.5pt;color:#9A8A76">• {note}</div>'
+        f'font-size:7.5pt;color:#9A8A76">&bull; {note}</div>'
         for i, note in enumerate(notes)
     )
 
@@ -308,7 +308,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
               background:#1A1A1A;display:flex;align-items:center;justify-content:flex-end;
               padding-right:28pt">
     <span style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
-      PRICES SUBJECT TO CHANGE &nbsp;•&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
+      PRICES SUBJECT TO CHANGE &nbsp;&bull;&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
     </span>
   </div>
   {margin_imgs_html}
@@ -328,10 +328,10 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;•&nbsp; SEE CARMEN TO REDEEM
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
       </div>
       <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
-        NOT EVERY ITEM IS DRESS CODE APPROVED — USE DISCRETION
+        NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
       </div>
     </div>
     <div style="font-size:11pt;font-weight:700;color:#FFC72C">I'M LOVIN' IT</div>
@@ -520,7 +520,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
               background:#1A1A1A;display:flex;align-items:center;justify-content:flex-end;
               padding-right:28pt">
     <span style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
-      PRICES SUBJECT TO CHANGE &nbsp;•&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
+      PRICES SUBJECT TO CHANGE &nbsp;&bull;&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
     </span>
   </div>
 
@@ -544,10 +544,10 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;•&nbsp; SEE CARMEN TO REDEEM
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
       </div>
       <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
-        NOT EVERY ITEM IS DRESS CODE APPROVED — USE DISCRETION
+        NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
       </div>
     </div>
     <div style="font-size:11pt;font-weight:700;color:#FFC72C">I'M LOVIN' IT</div>

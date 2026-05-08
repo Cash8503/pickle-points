@@ -2,7 +2,10 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta
+            name="viewport"
+            content="width=device-width,initial-scale=1,viewport-fit=cover"
+        />
         <title>Pickle Points Editor</title>
         <link
             rel="stylesheet"
@@ -13,21 +16,35 @@
         {% if admin_editing %}
         <!-- ADMIN BANNER -->
         <div id="admin-banner">
-          <span>Admin editing Store #{{ store_num }}</span>
-          <a href="/admin/store/back" id="btn-admin-back">&larr; Back to Admin Panel</a>
+            <span>Admin editing Store #{{ store_num }}</span>
+            <a href="/admin/store/back" id="btn-admin-back"
+                >&larr; Back to Admin Panel</a
+            >
         </div>
         {% endif %}
 
         <!-- TOP BAR -->
         <div id="topbar">
-            <h1>🥒 Pickle Points Editor</h1>
+            <h1>&#x1F952; Pickle Points Editor</h1>
             <div class="spacer"></div>
             <button id="btn-save" onclick="saveConfig()">Save Config</button>
             <button id="btn-preview" onclick="openPreview()">
-                Open Preview
+                Full Screen Preview
             </button>
-            <span id="status">Loading…</span>
+            <span id="status">Loading&hellip;</span>
+            {% if switch_stores|length > 1 %}
+            <form method="POST" action="/pick-store" id="store-switcher">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <select name="store" onchange="this.form.submit()">
+                {% for s in switch_stores %}
+                <option value="{{ s }}"{% if s == store_num %} selected{% endif %}>Store #{{ s }}</option>
+                {% endfor %}
+              </select>
+            </form>
+            {% else %}
             <span id="store-badge">Store #{{ store_num }}</span>
+            {% endif %}
+            {% if is_admin %}<a href="/admin" id="btn-admin-panel">Admin Panel</a>{% endif %}
             <a href="/logout" id="btn-logout">Sign Out</a>
         </div>
 
@@ -41,9 +58,6 @@
             </button>
             <button class="mob-btn" onclick="showMobilePanel('center', this)">
                 Page
-            </button>
-            <button class="mob-btn" onclick="showMobilePanel('right', this)">
-                Edit
             </button>
             <button class="mob-btn" onclick="showMobilePanel('preview', this)">
                 Preview
@@ -76,9 +90,10 @@
                     <div id="pages-list"></div>
                     <div class="btn-row">
                         <button onclick="addPage()">+ Add</button>
+                        <button onclick="dupPage()">Dup</button>
                         <button onclick="delPage()">Del</button>
-                        <button onclick="movePage(-1)">↑</button>
-                        <button onclick="movePage(1)">↓</button>
+                        <button onclick="movePage(-1)">&uarr;</button>
+                        <button onclick="movePage(1)">&darr;</button>
                     </div>
                 </div>
 
@@ -224,9 +239,10 @@
                     <div class="btn-row">
                         <button onclick="addSmItem()">+ SM</button>
                         <button onclick="addManualItem()">+ Manual</button>
+                        <button onclick="dupItem()">Dup</button>
                         <button onclick="delItem()">Del</button>
-                        <button onclick="moveItem(-1)">↑</button>
-                        <button onclick="moveItem(1)">↓</button>
+                        <button onclick="moveItem(-1)">&uarr;</button>
+                        <button onclick="moveItem(1)">&darr;</button>
                     </div>
                 </div>
 
@@ -248,8 +264,8 @@
                     <div class="btn-row">
                         <button onclick="addEarnReason()">+ Add</button>
                         <button onclick="delEarnReason()">Del</button>
-                        <button onclick="moveEarnReason(-1)">↑</button>
-                        <button onclick="moveEarnReason(1)">↓</button>
+                        <button onclick="moveEarnReason(-1)">&uarr;</button>
+                        <button onclick="moveEarnReason(1)">&darr;</button>
                     </div>
                     <div class="section-header" style="margin-top: 6px">
                         Notes
@@ -262,8 +278,14 @@
                 </div>
             </div>
 
-            <!-- RIGHT PANEL -->
+            <!-- RIGHT PANEL (overlay on mobile) -->
             <div id="right-panel">
+                <div id="mob-edit-header">
+                    <button id="mob-back-btn" onclick="closeMobileEdit()">
+                        &#8592; Items
+                    </button>
+                    <span id="mob-edit-title">Edit Item</span>
+                </div>
                 <div class="no-item-msg" id="no-item-msg">
                     Select an item to edit
                 </div>
@@ -276,15 +298,15 @@
             <!-- LIVE PREVIEW PANEL -->
             <div id="preview-panel">
                 <div id="preview-toolbar">
-                    <span id="preview-status">Loading preview…</span>
+                    <span id="preview-status">Loading preview&hellip;</span>
                     <button onclick="reloadPreview()" title="Force refresh">
-                        ↺ Refresh
+                        &#x21BA; Refresh
                     </button>
                     <button
                         onclick="window.open('/preview', '_blank')"
                         title="Open printable version"
                     >
-                        🖨 Print view
+                        &#x1F5A8; Print view
                     </button>
                 </div>
                 <iframe

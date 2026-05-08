@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickle Points &mdash; Edit User</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --red:    #DA291C;
+  --yellow: #FFC72C;
+  --pickle: #4A6B1F;
+  --dark:   #1A1A1A;
+  --muted:  #9A8A76;
+  --border: #E8DFC8;
+  --bg:     #EDEBE7;
+  --panel:  #F7F5F1;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  min-height: 100vh;
+}
+#topbar {
+  background: var(--dark);
+  border-bottom: 3px solid var(--red);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 48px;
+}
+#topbar h1 { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: .5px; }
+#topbar h1 span { color: var(--red); }
+#topbar .spacer { flex: 1; }
+.topbar-link {
+  font-size: 11px; font-weight: 600; color: #aaa; text-decoration: none;
+  padding: 4px 10px; border: 1px solid #444; border-radius: 4px;
+}
+.topbar-link:hover { background: #333; color: #fff; }
+
+.container { max-width: 540px; margin: 0 auto; padding: 32px 20px; }
+.page-title { font-size: 18px; font-weight: 800; color: var(--dark); margin-bottom: 4px; }
+.page-sub   { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 28px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px;
+}
+
+.error {
+  background: #fff0f0; border: 1px solid var(--red); color: var(--red);
+  border-radius: 4px; padding: 8px 12px; font-size: 12px; margin-bottom: 16px; font-weight: 600;
+}
+
+.field { margin-bottom: 14px; }
+.field label {
+  display: block; font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px;
+}
+.field input[type=text] {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 5px;
+  font-size: 13px; font-weight: 600; color: var(--dark); background: #fff; outline: none;
+  transition: border-color .15s;
+}
+.field input:focus { border-color: var(--pickle); }
+.field input::placeholder { color: #ccc; font-weight: 400; }
+.field-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.checkbox-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--dark); cursor: pointer;
+}
+.checkbox-label input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
+.store-checklist {
+  border: 1px solid var(--border); border-radius: 5px; background: #fff;
+  padding: 8px 10px; max-height: 160px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.store-check-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; color: var(--dark); cursor: pointer;
+}
+.store-check-item input[type=checkbox] { cursor: pointer; }
+.no-stores-hint { font-size: 12px; color: var(--muted); font-style: italic; }
+
+.btn {
+  display: inline-block; padding: 8px 16px; font-size: 12px; font-weight: 700;
+  border-radius: 5px; border: none; cursor: pointer; text-decoration: none;
+  letter-spacing: .3px; transition: opacity .12s; white-space: nowrap;
+}
+.btn:hover { opacity: .85; }
+.btn-edit    { background: var(--pickle); color: #fff; }
+.btn-danger  { background: var(--red); color: #fff; }
+.btn-outline { background: #fff; color: #555; border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--border); opacity: 1; }
+
+.actions-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.danger-zone { border-top: 1px dashed #e0cfc0; padding-top: 14px; margin-top: 14px; }
+.danger-label {
+  font-size: 10px; font-weight: 700; color: var(--red);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px;
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>&#x1F952; PICKLE POINTS <span>ADMIN</span></h1>
+  <div class="spacer"></div>
+  <a class="topbar-link" href="/admin">&#x2190; Dashboard</a>
+  <a class="topbar-link" href="/admin/logout">Sign Out</a>
+</div>
+
+<div class="container">
+  <div class="page-title">Edit User</div>
+  <div class="page-sub">@{{ user.username }} &mdash; {{ user.real_name }}</div>
+
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <div class="card">
+    <div class="card-title">Account Details</div>
+    <form method="POST" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="real_name">Full Name</label>
+        <input type="text" id="real_name" name="real_name"
+               value="{{ user.real_name }}" placeholder="Jane Smith" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username"
+               value="{{ user.username }}" placeholder="jsmith" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Stores</label>
+        <div class="store-checklist">
+          {% for s in all_stores %}
+          <label class="store-check-item">
+            <input type="checkbox" name="stores" value="{{ s }}"
+                   {% if s in stores %}checked{% endif %}> Store #{{ s }}
+          </label>
+          {% else %}
+          <span class="no-stores-hint">No stores exist yet.</span>
+          {% endfor %}
+        </div>
+        <div class="field-hint">Leave all unchecked for admin-only accounts with no assigned store.</div>
+      </div>
+      <div class="field">
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_admin" {% if user.is_admin %}checked{% endif %}>
+          Admin &mdash; can access the admin dashboard and manage all stores
+        </label>
+      </div>
+      <div class="actions-row">
+        <button type="submit" class="btn btn-edit">Save Changes</button>
+        <a class="btn btn-outline" href="/admin">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="danger-label">Danger Zone</div>
+    <div class="actions-row">
+      <form method="POST" action="/admin/users/{{ user.id }}/reset-password"
+            onsubmit="return confirm('Clear password for {{ user.username }}? They will be prompted to set a new one on next login.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline">Reset Password</button>
+      </form>
+      <form method="POST" action="/admin/users/{{ user.id }}/delete"
+            onsubmit="return confirm('Permanently delete {{ user.username }}? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">Delete User</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
