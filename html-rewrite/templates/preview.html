@@ -53,6 +53,7 @@
   }
   @media print {
     #printbar, #printbar-spacer, .page-screen-gap { display: none !important; }
+    #page-scaler { zoom: 1 !important; }
     html, body {
       background: white !important;
       padding: 0 !important;
@@ -91,8 +92,30 @@
 
 <div id="printbar-spacer" style="height:44pt"></div>
 
+<div id="page-scaler">
 {{ pages_html|safe }}
+</div>
 <script>
+// ── Scale-to-fit ──────────────────────────────────────────────
+(function () {
+  var PAGE_W = 816; // 612pt × (96px ÷ 72pt)
+  var scaler = document.getElementById('page-scaler');
+
+  function applyScale() {
+    if (!scaler) return;
+    var scale = Math.min(1, window.innerWidth / PAGE_W);
+    scaler.style.zoom = scale;
+  }
+
+  window.addEventListener('resize', applyScale);
+  applyScale();
+
+  // Expose so print handlers can reset/restore
+  window._scaleApply = applyScale;
+  window._scaleReset = function () { if (scaler) scaler.style.zoom = ''; };
+})();
+
+// ── Print helpers ─────────────────────────────────────────────
 let previewPrintScroll = null;
 
 function preparePrintScroll() {
@@ -102,6 +125,7 @@ function preparePrintScroll() {
       y: window.scrollY || 0
     };
   }
+  window._scaleReset && window._scaleReset();
   window.scrollTo(0, 0);
 }
 
@@ -109,6 +133,7 @@ function restorePrintScroll() {
   if (!previewPrintScroll) return;
   window.scrollTo(previewPrintScroll.x, previewPrintScroll.y);
   previewPrintScroll = null;
+  window._scaleApply && window._scaleApply();
 }
 
 function printFromTop() {

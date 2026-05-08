@@ -224,7 +224,7 @@ function addSmItem() {
   const page = currentPage();
   if (!page) return;
   page.items = page.items || [];
-  page.items.push({ type: 'smilemakers', urls: ['https://smilemakersonline.com/'] });
+  page.items.push({ type: 'smilemakers', urls: [] });
   itemIdx = page.items.length - 1;
   renderItems();
   buildItemEditor();
@@ -300,7 +300,8 @@ function buildSmEditor(ed, item) {
           <select id="url-select" size="4" style="width:100%;border:none;font-family:monospace;font-size:10px"></select>
         </div>
         <input type="text" id="url-entry" placeholder="https://smilemakersonline.com/product/"
-               style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:monospace;font-size:10px">
+               style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:monospace;font-size:10px"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();urlAdd();}">
         <div class="url-actions">
           <button onclick="urlAdd()">Add</button>
           <button onclick="urlReplace()">Replace</button>
@@ -666,6 +667,7 @@ function urlAdd() {
   document.getElementById('url-entry').value = '';
   refreshUrlSelect(item);
   renderItems();
+  scheduleSave();
 }
 
 function urlReplace() {
@@ -678,6 +680,7 @@ function urlReplace() {
   item.urls[sel.selectedIndex] = u;
   refreshUrlSelect(item);
   renderItems();
+  scheduleSave();
 }
 
 function urlRemove() {
@@ -689,6 +692,7 @@ function urlRemove() {
   item.urls.splice(sel.selectedIndex, 1);
   refreshUrlSelect(item);
   renderItems();
+  scheduleSave();
 }
 
 function clearOverride(key, inputId) {
@@ -975,5 +979,46 @@ function currentPage() {
   return (cfg && cfg.pages && cfg.pages[pageIdx]) || null;
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Mobile panel switching
+// ──────────────────────────────────────────────────────────────────
+const PANEL_IDS = ['left-panel', 'center-panel', 'right-panel', 'preview-panel'];
+
+function showMobilePanel(panel, btn) {
+  const map = { left: 'left-panel', center: 'center-panel', right: 'right-panel', preview: 'preview-panel' };
+  const targetId = map[panel];
+  PANEL_IDS.forEach(id => {
+    document.getElementById(id).classList.toggle('mob-hidden', id !== targetId);
+  });
+  document.querySelectorAll('.mob-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (panel === 'preview') reloadPreview();
+}
+
+function initMobile() {
+  const isMobile = window.innerWidth <= 900;
+  if (!isMobile) {
+    // Desktop: unhide all panels and clear any drag-set explicit widths
+    PANEL_IDS.forEach(id => document.getElementById(id).classList.remove('mob-hidden'));
+    const right = document.getElementById('right-panel');
+    const prev  = document.getElementById('preview-panel');
+    right.style.flex = '';
+    right.style.width = '';
+    prev.style.flex = '';
+    prev.style.width = '';
+    return;
+  }
+  // Mobile: ensure exactly one panel is visible; default to left (Pages)
+  const visible = PANEL_IDS.filter(id => !document.getElementById(id).classList.contains('mob-hidden'));
+  if (visible.length !== 1) {
+    PANEL_IDS.forEach(id => {
+      document.getElementById(id).classList.toggle('mob-hidden', id !== 'left-panel');
+    });
+    document.querySelectorAll('.mob-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  }
+}
+
+window.addEventListener('resize', initMobile);
+
 // Boot
-boot();
+boot().then(() => initMobile());

@@ -1,8 +1,10 @@
+import threading
+
 from flask import jsonify, render_template, request
 
 from config import load_config, save_config
 from preview_render import render_preview_html
-from services import fetch_smilemakers_product, resolve_items_for_preview
+from services import fetch_smilemakers_product, prefetch_new_urls, resolve_items_for_preview
 
 
 def register_routes(app):
@@ -21,6 +23,7 @@ def register_routes(app):
         try:
             cfg = request.get_json(force=True)
             save_config(cfg)
+            threading.Thread(target=prefetch_new_urls, args=(cfg,), daemon=True).start()
             return jsonify({"ok": True})
         except Exception as exc:
             return jsonify({"ok": False, "error": str(exc)}), 500

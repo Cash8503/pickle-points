@@ -233,7 +233,10 @@ def fetch_smilemakers_product(url):
         except Exception:
             break
 
-    _SMILEMAKERS_CACHE[url] = result
+    # Only cache successful results — a failed/empty fetch must not poison the cache
+    # so that the next preview load retries instead of returning blank forever.
+    if result[0] or result[2]:  # name or image URL
+        _SMILEMAKERS_CACHE[url] = result
     return result
 
 def extract_dominant_colors(image_url, n=5):
@@ -387,6 +390,25 @@ def resolve_items_for_preview(cfg):
     return resolved_pages, per_pickle, pickle_value
 
 SIZE_ORDER = _SIZE_ORDER
+
+def prefetch_new_urls(cfg):
+    """Fetch any SmileMakers URLs in cfg that are not yet cached.
+    Intended to run in a background thread immediately after a config save so
+    that new items are ready before the next preview reload arrives."""
+    s = cfg.get("settings", {})
+    concurrency = s.get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY)
+    urls = []
+    for page in cfg.get("pages", []):
+        for item in page.get("items", []):
+            if item.get("type") == "smilemakers":
+                for u in (item.get("urls") or []):
+                    if u and u not in _SMILEMAKERS_CACHE:
+                        urls.append(u)
+    if not urls:
+        return
+    with ThreadPoolExecutor(max_workers=min(concurrency, len(urls))) as pool:
+        list(pool.map(fetch_smilemakers_product, urls))
+
 
 def warm_cache():
 
