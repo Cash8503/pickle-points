@@ -1,9 +1,26 @@
-old/*
-__pycache__
-.claude
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ── App runtime data ──────────────────────────────────────────
+html-rewrite/appdata.db
+html-rewrite/appdata.db-shm
+html-rewrite/appdata.db-wal
+html-rewrite/appdata.db.bak
+html-rewrite/.secret_key
+html-rewrite/cache/
+
+# ── Legacy / migrated files ───────────────────────────────────
+html-rewrite/configs/
+html-rewrite/pickle_points_config.json
+html-rewrite/pickle_points_config.json.bak
 pickle_points_config.json
-configs/
-.secret_key
-__pycache__
-admin.auth
+
+# ── Old auth files (replaced by user DB) ─────────────────────
 *.auth
+html-rewrite/admin.auth
+
+# ── Old project layout ────────────────────────────────────────
+old/
+.claude
