@@ -21,6 +21,9 @@ pickle_points_config.json
 *.auth
 html-rewrite/admin.auth
 
+# ── Local working files ───────────────────────────────────────
+todolist.md
+
 # ── Old project layout ────────────────────────────────────────
 old/
 .claude
