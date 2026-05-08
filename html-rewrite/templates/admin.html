@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickle Points — Admin Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --red:    #DA291C;
+  --yellow: #FFC72C;
+  --pickle: #4A6B1F;
+  --dark:   #1A1A1A;
+  --muted:  #9A8A76;
+  --border: #E8DFC8;
+  --bg:     #EDEBE7;
+  --panel:  #F7F5F1;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  min-height: 100vh;
+}
+/* ── Top bar ── */
+#topbar {
+  background: var(--dark);
+  border-bottom: 3px solid var(--red);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 48px;
+}
+#topbar h1 { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: .5px; }
+#topbar h1 span { color: var(--red); }
+#topbar .spacer { flex: 1; }
+.topbar-link {
+  font-size: 11px; font-weight: 600; color: #aaa; text-decoration: none;
+  padding: 4px 10px; border: 1px solid #444; border-radius: 4px;
+}
+.topbar-link:hover { background: #333; color: #fff; }
+
+/* ── Content ── */
+.container { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
+.page-title { font-size: 20px; font-weight: 800; color: var(--dark); margin-bottom: 6px; }
+.page-sub   { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+/* ── Flash messages ── */
+.flash-list { list-style: none; margin-bottom: 16px; }
+.flash-ok  { background: #eefbe6; border: 1px solid var(--pickle); color: #2a4a0a;
+             border-radius: 5px; padding: 9px 14px; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.flash-err { background: #fff0f0; border: 1px solid var(--red); color: var(--red);
+             border-radius: 5px; padding: 9px 14px; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+
+/* ── Empty state ── */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+  background: var(--panel); border-radius: 10px; border: 1px solid var(--border);
+}
+.empty-state p { font-size: 14px; margin-bottom: 8px; }
+.empty-state small { font-size: 12px; }
+
+/* ── Store cards ── */
+.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.store-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.card-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: var(--dark);
+  border-bottom: 2px solid var(--yellow);
+}
+.card-head .store-num { font-size: 18px; font-weight: 800; color: var(--yellow); }
+.card-head .meta { flex: 1; }
+.card-head .meta-row { font-size: 11px; color: #aaa; }
+.card-head .meta-row strong { color: #ccc; }
+.no-codeword-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px;
+  background: #FFC72C33; color: var(--yellow); border-radius: 10px;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.card-body { padding: 14px 16px; }
+
+/* Action sections */
+.action-section { margin-bottom: 14px; }
+.action-label {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
+}
+.action-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+/* Buttons */
+.btn {
+  display: inline-block; padding: 6px 12px; font-size: 11px; font-weight: 700;
+  border-radius: 4px; border: none; cursor: pointer; text-decoration: none;
+  letter-spacing: .3px; transition: opacity .12s; white-space: nowrap;
+}
+.btn:hover { opacity: .85; }
+.btn-edit    { background: var(--pickle); color: #fff; }
+.btn-dl      { background: #3a7fc1; color: #fff; }
+.btn-danger  { background: var(--red); color: #fff; }
+.btn-outline {
+  background: #fff; color: #555; border: 1px solid var(--border);
+}
+.btn-outline:hover { background: var(--border); opacity: 1; }
+
+/* Inline forms */
+.inline-form { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.inline-form input[type=text], .inline-form input[type=file] {
+  flex: 1; min-width: 0;
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 11px; background: #fff;
+}
+.inline-form input[type=file] { padding: 3px 6px; }
+.inline-form select {
+  flex: 1; padding: 5px 6px; border: 1px solid var(--border);
+  border-radius: 4px; font-size: 11px; background: #fff;
+}
+
+/* Confirm-delete section */
+.danger-zone { border-top: 1px dashed #e0cfc0; padding-top: 12px; margin-top: 4px; }
+
+/* Source store select for copy */
+.copy-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 600px) {
+  .store-grid { grid-template-columns: 1fr; }
+  .inline-form { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>🥒 PICKLE POINTS <span>ADMIN</span></h1>
+  <div class="spacer"></div>
+  <a class="topbar-link" href="/admin/logout">Sign Out</a>
+</div>
+
+<div class="container">
+  <div class="page-title">Store Dashboard</div>
+  <div class="page-sub">{{ stores|length }} store{{ 's' if stores|length != 1 else '' }} registered</div>
+
+  {% if messages %}
+  <ul class="flash-list">
+    {% for cat, msg in messages %}
+    <li class="{{ 'flash-ok' if cat == 'ok' else 'flash-err' }}">{{ msg }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if not stores %}
+  <div class="empty-state">
+    <p>No stores yet.</p>
+    <small>Stores appear here automatically once a manager logs in for the first time.</small>
+  </div>
+  {% else %}
+  <div class="store-grid">
+    {% for s in stores %}
+    <div class="store-card">
+      <div class="card-head">
+        <div>
+          <div class="store-num">Store #{{ s.num }}</div>
+          {% if not s.has_codeword %}<div class="no-codeword-badge">No Codeword</div>{% endif %}
+        </div>
+        <div class="meta">
+          <div class="meta-row">
+            <strong>{{ s.page_count }}</strong> page{{ 's' if s.page_count != 1 else '' }},
+            <strong>{{ s.item_count }}</strong> item{{ 's' if s.item_count != 1 else '' }}
+          </div>
+          {% if s.last_modified %}
+          <div class="meta-row">
+            Last saved:
+            <strong>{{ s.last_modified | int | timestamp_to_str }}</strong>
+          </div>
+          {% else %}
+          <div class="meta-row">No config saved yet</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card-body">
+
+        <!-- Quick actions -->
+        <div class="action-section">
+          <div class="action-row">
+            <a class="btn btn-edit" href="/admin/store/{{ s.num }}/edit">Edit Page</a>
+            <a class="btn btn-dl"   href="/admin/store/{{ s.num }}/download">Download JSON</a>
+          </div>
+        </div>
+
+        <!-- Reset codeword -->
+        <div class="action-section">
+          <div class="action-label">Reset Codeword</div>
+          <form method="POST" action="/admin/store/{{ s.num }}/reset-codeword" class="inline-form">
+            <input type="text" name="codeword" placeholder="New codeword (leave blank to clear)">
+            <button type="submit" class="btn btn-outline">Set</button>
+          </form>
+        </div>
+
+        <!-- Copy config from another store -->
+        <div class="action-section">
+          <div class="action-label">Copy Config From Another Store</div>
+          <form method="POST" action="/admin/store/{{ s.num }}/copy-config" class="inline-form copy-row">
+            <select name="source">
+              <option value="">— select source store —</option>
+              {% for other in stores if other.num != s.num %}
+              <option value="{{ other.num }}">Store #{{ other.num }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Copy</button>
+          </form>
+        </div>
+
+        <!-- Upload config -->
+        <div class="action-section">
+          <div class="action-label">Upload Config (JSON)</div>
+          <form method="POST" action="/admin/store/{{ s.num }}/upload"
+                enctype="multipart/form-data" class="inline-form">
+            <input type="file" name="config_file" accept=".json">
+            <button type="submit" class="btn btn-outline">Upload</button>
+          </form>
+        </div>
+
+        <!-- Delete store -->
+        <div class="danger-zone">
+          <div class="action-label" style="color:#DA291C">Danger Zone</div>
+          <form method="POST" action="/admin/store/{{ s.num }}/delete"
+                onsubmit="return confirm('Delete Store #{{ s.num }}? This cannot be undone.')">
+            <button type="submit" class="btn btn-danger">Delete Store</button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+</body>
+</html>

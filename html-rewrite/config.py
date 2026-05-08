@@ -9,17 +9,16 @@ PROJECT_DIR = os.path.dirname(APP_DIR)
 CONFIGS_DIR = os.path.join(APP_DIR, "configs")
 CONFIG_PATH = os.path.join(APP_DIR, "pickle_points_config.json")  # legacy single-store
 LEGACY_CONFIG_PATH = os.path.join(PROJECT_DIR, "pickle_points_config.json")
+_ADMIN_AUTH_FILE = os.path.join(APP_DIR, "admin.auth")
 
 DEFAULT_FETCH_CONCURRENCY = 5
 DEFAULT_PRICE_PER_PICKLE  = 0.50
 DEFAULT_PICKLE_VALUE      = 1
-
 _PBKDF2_ITERS = 100_000
 
 
 # ── Store number helpers ───────────────────────────────────────────
 def sanitize_store_num(s):
-    """Allow only alphanumeric characters, max 20 chars (prevents path traversal)."""
     return re.sub(r"[^a-zA-Z0-9]", "", str(s))[:20]
 
 
@@ -28,13 +27,12 @@ def get_store_config_path(store_num):
     return os.path.join(CONFIGS_DIR, f"store_{store_num}.json")
 
 
-def _get_auth_path(store_num):
+def get_auth_path(store_num):
     os.makedirs(CONFIGS_DIR, exist_ok=True)
     return os.path.join(CONFIGS_DIR, f"store_{store_num}.auth")
 
 
 def list_store_nums():
-    """Return every store number that already has a saved config file."""
     if not os.path.isdir(CONFIGS_DIR):
         return []
     nums = []
@@ -44,32 +42,76 @@ def list_store_nums():
     return nums
 
 
-# ── Codeword auth ──────────────────────────────────────────────────
+def get_store_metadata(store_num):
+    """Return display metadata for the admin dashboard."""
+    path = get_store_config_path(store_num)
+    if not os.path.exists(path):
+        return {"last_modified": None, "item_count": 0, "page_count": 0}
+    mtime = os.path.getmtime(path)
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        pages = cfg.get("pages", [])
+        item_count = sum(len(p.get("items", [])) for p in pages)
+        return {"last_modified": mtime, "item_count": item_count, "page_count": len(pages)}
+    except Exception:
+        return {"last_modified": mtime, "item_count": 0, "page_count": 0}
+
+
+# ── Store codeword auth ────────────────────────────────────────────
 def store_has_codeword(store_num):
-    return os.path.exists(_get_auth_path(store_num))
+    return os.path.exists(get_auth_path(store_num))
+
+
+def _hash_secret(secret):
+    salt = os.urandom(16)
+    key = hashlib.pbkdf2_hmac("sha256", secret.encode("utf-8"), salt, _PBKDF2_ITERS)
+    return salt.hex() + ":" + key.hex()
+
+
+def _check_secret(secret, stored):
+    try:
+        salt_hex, key_hex = stored.strip().split(":", 1)
+    except ValueError:
+        return False
+    key = hashlib.pbkdf2_hmac("sha256", secret.encode("utf-8"), bytes.fromhex(salt_hex), _PBKDF2_ITERS)
+    return hmac.compare_digest(key.hex(), key_hex)
 
 
 def set_codeword(store_num, codeword):
-    """Hash codeword with PBKDF2-HMAC-SHA256 and persist it."""
-    salt = os.urandom(16)
-    key = hashlib.pbkdf2_hmac("sha256", codeword.encode("utf-8"), salt, _PBKDF2_ITERS)
-    with open(_get_auth_path(store_num), "w") as f:
-        f.write(salt.hex() + ":" + key.hex())
+    with open(get_auth_path(store_num), "w") as f:
+        f.write(_hash_secret(codeword))
 
 
 def verify_codeword(store_num, codeword):
-    """Return True if codeword matches the stored hash."""
-    path = _get_auth_path(store_num)
+    path = get_auth_path(store_num)
     if not os.path.exists(path):
         return False
     with open(path) as f:
-        stored = f.read().strip()
-    try:
-        salt_hex, key_hex = stored.split(":", 1)
-    except ValueError:
+        return _check_secret(codeword, f.read())
+
+
+def clear_codeword(store_num):
+    path = get_auth_path(store_num)
+    if os.path.exists(path):
+        os.remove(path)
+
+
+# ── Admin password auth ────────────────────────────────────────────
+def admin_has_password():
+    return os.path.exists(_ADMIN_AUTH_FILE)
+
+
+def set_admin_password(password):
+    with open(_ADMIN_AUTH_FILE, "w") as f:
+        f.write(_hash_secret(password))
+
+
+def verify_admin_password(password):
+    if not os.path.exists(_ADMIN_AUTH_FILE):
         return False
-    key = hashlib.pbkdf2_hmac("sha256", codeword.encode("utf-8"), bytes.fromhex(salt_hex), _PBKDF2_ITERS)
-    return hmac.compare_digest(key.hex(), key_hex)
+    with open(_ADMIN_AUTH_FILE) as f:
+        return _check_secret(password, f.read())
 
 
 # ── Config load / save ─────────────────────────────────────────────
@@ -113,7 +155,6 @@ def load_config(store_num=None):
         _write_config(path, cfg)
         return cfg
 
-    # Legacy single-store fallback
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, encoding="utf-8") as f:
             return json.load(f)
@@ -134,8 +175,3 @@ def save_config(cfg, store_num=None):
         _write_config(CONFIG_PATH, cfg)
 
 
-def _get_setting(cfg, *keys, default=None):
-    s = cfg.get("settings", {})
-    for k in keys:
-        if k in s: return s[k]
-    return default

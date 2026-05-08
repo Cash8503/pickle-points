@@ -1,3 +1,4 @@
+import datetime
 import os
 import threading
 
@@ -29,6 +30,10 @@ def create_app():
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
         return response
+
+    @app.template_filter("timestamp_to_str")
+    def _timestamp_to_str(ts):
+        return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
     register_routes(app)
     return app

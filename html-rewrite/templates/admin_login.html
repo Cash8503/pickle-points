@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickle Points — Admin</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #1A1A1A;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.card {
+  background: #F7F5F1;
+  border-radius: 12px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.6);
+}
+.brand {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.brand-pill {
+  display: inline-block;
+  background: #1A1A1A;
+  border-bottom: 3px solid #DA291C;
+  border-radius: 6px;
+  padding: 7px 20px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 1px;
+}
+.brand-sub {
+  font-size: 11px;
+  color: #9A8A76;
+  margin-top: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+h2 { font-size: 14px; font-weight: 700; color: #1A1A1A; margin-bottom: 16px; }
+.field { margin-bottom: 14px; }
+.field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #9A8A76;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 6px;
+}
+.field input[type=password] {
+  width: 100%;
+  padding: 11px 14px;
+  border: 2px solid #E8DFC8;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1A1A1A;
+  background: #fff;
+  outline: none;
+  transition: border-color .15s;
+  letter-spacing: 3px;
+}
+.field input:focus { border-color: #DA291C; }
+.field input::placeholder { color: #ccc; letter-spacing: 1px; font-weight: 400; font-size: 16px; }
+.notice {
+  background: #FFF8F8;
+  border: 1px solid #DA291C;
+  border-left: 4px solid #DA291C;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #7a1010;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.notice strong { display: block; margin-bottom: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.error {
+  background: #fff0f0;
+  border: 1px solid #DA291C;
+  color: #DA291C;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+button[type=submit] {
+  width: 100%;
+  margin-top: 4px;
+  padding: 13px;
+  background: #DA291C;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .5px;
+  transition: background .12s;
+}
+button[type=submit]:hover { background: #b51f13; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="brand-pill">🥒 ADMIN</div>
+    <div class="brand-sub">Pickle Points — Admin Panel</div>
+  </div>
+
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  {% if is_setup %}
+  <h2>Create an admin password</h2>
+  <div class="notice">
+    <strong>First-time setup</strong>
+    Choose a strong password. This protects all store configs and codewords.
+  </div>
+  <form method="POST" autocomplete="off">
+    <div class="field">
+      <label for="password">New Password</label>
+      <input type="password" id="password" name="password"
+             placeholder="••••••••" autofocus autocomplete="new-password">
+    </div>
+    <button type="submit">Create Password &amp; Continue &rarr;</button>
+  </form>
+  {% else %}
+  <h2>Admin login</h2>
+  <form method="POST" autocomplete="off">
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password"
+             placeholder="••••••••" autofocus autocomplete="current-password">
+    </div>
+    <button type="submit">Sign In &rarr;</button>
+  </form>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -10,6 +10,14 @@
         />
     </head>
     <body>
+        {% if admin_editing %}
+        <!-- ADMIN BANNER -->
+        <div id="admin-banner">
+          <span>Admin editing Store #{{ store_num }}</span>
+          <a href="/admin/store/back" id="btn-admin-back">&larr; Back to Admin Panel</a>
+        </div>
+        {% endif %}
+
         <!-- TOP BAR -->
         <div id="topbar">
             <h1>🥒 Pickle Points Editor</h1>
