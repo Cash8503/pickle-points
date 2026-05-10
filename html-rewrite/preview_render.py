@@ -148,10 +148,10 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
             x  = int(cx - IMG_SIZE / 2)
             y  = int(cy - IMG_SIZE / 2)
             out += (
-                f'<img src="{url}" '
+                f'<img class="earn-filler-image" src="{url}" '
                 f'style="position:absolute;left:{x}pt;top:{y}pt;'
                 f'width:{IMG_SIZE}pt;height:{IMG_SIZE}pt;object-fit:contain;'
-                f'border-radius:8pt;opacity:0.6;border:0.8pt solid #E8DFC8;'
+                f'border-radius:8pt;border:0.8pt solid #E8DFC8;'
                 f'box-shadow:1pt 2pt 5pt rgba(0,0,0,.07)">'
             )
         return out
@@ -259,10 +259,10 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
         for j, url in enumerate(row_imgs):
             x = int(row_start_x + j * (EX_SIZE + EX_GAP))
             extra_imgs_html += (
-                f'<img src="{url}" '
+                f'<img class="earn-filler-image" src="{url}" '
                 f'style="position:absolute;left:{x}pt;top:{row_top}pt;'
                 f'width:{EX_SIZE}pt;height:{EX_SIZE}pt;object-fit:contain;'
-                f'border-radius:6pt;opacity:0.65;border:0.8pt solid #E8DFC8;'
+                f'border-radius:6pt;border:0.8pt solid #E8DFC8;'
                 f'box-shadow:1pt 2pt 5pt rgba(0,0,0,.07)">'
             )
 
@@ -307,7 +307,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
   <div style="position:absolute;top:136pt;left:0;width:612pt;height:28pt;
               background:#1A1A1A;display:flex;align-items:center;justify-content:flex-end;
               padding-right:28pt">
-    <span style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
+    <span class="print-on-dark" style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
       PRICES SUBJECT TO CHANGE &nbsp;&bull;&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
     </span>
   </div>
@@ -327,10 +327,10 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
   <div style="position:absolute;bottom:0;left:0;width:612pt;height:38pt;
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
-      <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
+      <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
         EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
       </div>
-      <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
+      <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
       </div>
     </div>
@@ -429,7 +429,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 )
 
             cell_html = f'''
-<div style="position:relative;background:#fff;border-radius:8pt;
+<div class="reward-card" style="position:relative;background:#fff;border-radius:8pt;
      border:0.8pt solid #E8DFC8;box-shadow:2pt 2pt 6pt rgba(0,0,0,.08);
      height:{card_h}pt;overflow:hidden;break-inside:avoid;page-break-inside:avoid">
   <div style="position:absolute;top:0;left:0;right:0;height:8pt;
@@ -458,7 +458,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
         # "Coming soon" if needed
         if items and len(items) % cols != 0:
             card_cells.append(f'''
-<div style="background:#F2F2F2;border-radius:8pt;
+<div class="reward-card coming-soon-card" style="background:#F2F2F2;border-radius:8pt;
      border:1.5pt dashed #7AAD35;height:{card_h}pt;
      display:flex;flex-direction:column;align-items:center;
      justify-content:center;break-inside:avoid;page-break-inside:avoid">
@@ -519,7 +519,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
   <div style="position:absolute;top:136pt;left:0;width:612pt;height:28pt;
               background:#1A1A1A;display:flex;align-items:center;justify-content:flex-end;
               padding-right:28pt">
-    <span style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
+    <span class="print-on-dark" style="font-size:6.5pt;color:rgba(255,255,255,.5);font-weight:600">
       PRICES SUBJECT TO CHANGE &nbsp;&bull;&nbsp; ORDERS WILL BE SUBMITTED ON THE LAST DAY OF EACH MONTH
     </span>
   </div>
@@ -543,10 +543,10 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
   <div style="position:absolute;bottom:0;left:0;width:612pt;height:38pt;
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
-      <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
+      <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
         EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
       </div>
-      <div style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
+      <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
       </div>
     </div>

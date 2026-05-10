@@ -42,16 +42,7 @@
                 />
                 <select name="store" onchange="this.form.submit()">
                     {% for s in switch_stores %}
-                    <option
-                        value="{{ s }}"
-                        {%
-                        if
-                        s=""
-                        ="store_num"
-                        %}selected{%
-                        endif
-                        %}
-                    >
+                    <option value="{{ s }}" {% if s == store_num %}selected{% endif %}>
                         Store #{{ s }}
                     </option>
                     {% endfor %}
