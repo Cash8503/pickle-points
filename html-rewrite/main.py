@@ -49,6 +49,22 @@ def create_app():
     def _timestamp_to_str(ts):
         return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
+    @app.template_filter("relative_time")
+    def _relative_time(ts):
+        if not ts:
+            return "Never"
+        seconds = max(0, int(datetime.datetime.now().timestamp() - float(ts)))
+        if seconds < 60:
+            return "just now"
+        minutes = seconds // 60
+        if minutes < 60:
+            return f"{minutes} min ago"
+        hours = minutes // 60
+        if hours < 48:
+            return f"{hours} hr ago"
+        days = hours // 24
+        return f"{days} days ago"
+
     register_routes(app)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     return app

@@ -20,8 +20,41 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   background: var(--bg);
+  color: var(--dark);
   min-height: 100vh;
 }
+body.dark-mode {
+  --dark:   #F4F1EA;
+  --muted:  #B9AC98;
+  --border: #3C352D;
+  --bg:     #141311;
+  --panel:  #1D1B18;
+  color: #ECE7DD;
+  color-scheme: dark;
+}
+body.dark-mode input {
+  background: #11100F !important;
+  color: #ECE7DD !important;
+  border-color: var(--border) !important;
+}
+body.dark-mode input::placeholder { color: #776F64 !important; }
+body.dark-mode input[type=checkbox] { accent-color: var(--yellow); }
+body.dark-mode #topbar { background: #0E0D0C; }
+body.dark-mode .store-checklist,
+body.dark-mode .btn-outline {
+  background: #11100F;
+  color: #ECE7DD;
+}
+body.dark-mode .btn-outline:hover {
+  background: #24211E;
+  color: #fff;
+}
+body.dark-mode .error {
+  background: #2A1110;
+  border-color: #DA291C;
+  color: #FFB8B2;
+}
+body.dark-mode .danger-zone { border-top-color: #5C493D; }
 #topbar {
   background: var(--dark);
   border-bottom: 3px solid var(--red);
@@ -112,7 +145,7 @@ body {
 }
 </style>
 </head>
-<body>
+<body class="{{ 'dark-mode' if dark_mode else '' }}">
 
 <div id="topbar">
   <h1>&#x1F952; PICKLE POINTS <span>ADMIN</span></h1>

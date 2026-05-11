@@ -5,6 +5,7 @@ import math
 import os
 import queue
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -32,8 +33,20 @@ CACHE_MAX_AGE  = 86_400  # 1 day in seconds
 
 _SMILEMAKERS_CACHE: dict = {}  # url -> (name, desc, image, price, variants)
 _cache_times:       dict = {}  # url -> fetched_at timestamp
-_manifest_lock            = __import__("threading").Lock()
+_cache_failures:    dict = {}  # url -> {"failed_at": timestamp, "error": message}
+_manifest_lock            = threading.Lock()
 _disk_cache_loaded        = False
+_warm_lock                = threading.Lock()
+_warm_state               = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "total": 0,
+    "done": 0,
+    "succeeded": 0,
+    "failed": 0,
+    "message": "Idle",
+}
 
 
 def load_disk_cache():
@@ -57,14 +70,22 @@ def load_disk_cache():
         fresh = {}
         stale = 0
         for url, entry in manifest.items():
-            if now - entry.get("fetched_at", 0) >= CACHE_MAX_AGE:
+            fetched_at = entry.get("fetched_at") or entry.get("failed_at") or 0
+            if now - fetched_at >= CACHE_MAX_AGE:
                 stale += 1
+                continue
+            if entry.get("status") == "failed":
+                _cache_failures[url] = {
+                    "failed_at": fetched_at,
+                    "error": entry.get("error") or "Fetch returned no product data",
+                }
+                fresh[url] = entry
                 continue
             result = entry.get("result")
             if not result or len(result) < 5:
                 continue
             _SMILEMAKERS_CACHE[url] = (result[0], result[1], result[2], result[3], result[4])
-            _cache_times[url]       = entry["fetched_at"]
+            _cache_times[url]       = fetched_at
             fresh[url]              = entry
         if stale:
             _write_manifest(fresh)
@@ -80,14 +101,39 @@ def _write_manifest(data: dict):
     os.replace(tmp, _MANIFEST_PATH)
 
 
+def _build_manifest(now=None):
+    now = now or time.time()
+    manifest = {
+        u: {"status": "ok", "fetched_at": _cache_times.get(u, now), "result": list(r)}
+        for u, r in _SMILEMAKERS_CACHE.items()
+    }
+    for u, failure in _cache_failures.items():
+        if u in manifest:
+            continue
+        manifest[u] = {
+            "status": "failed",
+            "failed_at": failure.get("failed_at", now),
+            "error": failure.get("error") or "Fetch returned no product data",
+        }
+    return manifest
+
+
 def _persist_entry(url: str, result: tuple):
     """Append/update one URL in the on-disk manifest. Thread-safe."""
     with _manifest_lock:
         now = time.time()
         _cache_times[url] = now
-        manifest = {u: {"fetched_at": _cache_times.get(u, now), "result": list(r)}
-                    for u, r in _SMILEMAKERS_CACHE.items()}
-        _write_manifest(manifest)
+        _cache_failures.pop(url, None)
+        _write_manifest(_build_manifest(now))
+
+
+def _persist_failure(url: str, error: str):
+    with _manifest_lock:
+        now = time.time()
+        _SMILEMAKERS_CACHE.pop(url, None)
+        _cache_times.pop(url, None)
+        _cache_failures[url] = {"failed_at": now, "error": error or "Fetch returned no product data"}
+        _write_manifest(_build_manifest(now))
 
 
 def clear_cache(url: str = None):
@@ -96,12 +142,12 @@ def clear_cache(url: str = None):
         if url:
             _SMILEMAKERS_CACHE.pop(url, None)
             _cache_times.pop(url, None)
+            _cache_failures.pop(url, None)
         else:
             _SMILEMAKERS_CACHE.clear()
             _cache_times.clear()
-        manifest = {u: {"fetched_at": _cache_times.get(u, time.time()), "result": list(r)}
-                    for u, r in _SMILEMAKERS_CACHE.items()}
-        _write_manifest(manifest)
+            _cache_failures.clear()
+        _write_manifest(_build_manifest())
 
 
 def cache_entries():
@@ -113,12 +159,66 @@ def cache_entries():
             fetched_at = _cache_times.get(url)
             entries.append({
                 "url": url,
+                "status": "cached",
                 "fetched_at": fetched_at,
+                "failed_at": None,
+                "last_seen": fetched_at,
+                "error": "",
                 "name": result[0] if len(result) > 0 else "",
                 "image": result[2] if len(result) > 2 else "",
                 "price": result[3] if len(result) > 3 else None,
             })
-        return sorted(entries, key=lambda e: e.get("fetched_at") or 0, reverse=True)
+        for url, failure in _cache_failures.items():
+            failed_at = failure.get("failed_at")
+            entries.append({
+                "url": url,
+                "status": "failed",
+                "fetched_at": None,
+                "failed_at": failed_at,
+                "last_seen": failed_at,
+                "error": failure.get("error") or "Fetch returned no product data",
+                "name": "",
+                "image": "",
+                "price": None,
+            })
+        return sorted(entries, key=lambda e: e.get("last_seen") or 0, reverse=True)
+
+
+def cache_entries_for_urls(urls):
+    """Return cache status rows for configured URLs, plus any orphaned cache rows."""
+    known = []
+    seen = set()
+    for url in urls:
+        if url and url not in seen:
+            seen.add(url)
+            known.append(url)
+    entries_by_url = {entry["url"]: entry for entry in cache_entries()}
+    rows = []
+    for url in known:
+        entry = entries_by_url.pop(url, None)
+        if entry:
+            entry = {**entry, "configured": True}
+        else:
+            entry = {
+                "url": url,
+                "status": "missing",
+                "configured": True,
+                "fetched_at": None,
+                "failed_at": None,
+                "last_seen": None,
+                "error": "",
+                "name": "",
+                "image": "",
+                "price": None,
+            }
+        rows.append(entry)
+    for entry in entries_by_url.values():
+        rows.append({**entry, "configured": False})
+    status_order = {"failed": 0, "missing": 1, "cached": 2}
+    return sorted(
+        rows,
+        key=lambda e: (status_order.get(e.get("status"), 9), -(e.get("last_seen") or 0), e.get("url") or ""),
+    )
 
 
 def _evict_stale():
@@ -126,15 +226,16 @@ def _evict_stale():
     with _manifest_lock:
         now    = time.time()
         stale  = [u for u, t in _cache_times.items() if now - t >= CACHE_MAX_AGE]
-        if not stale:
+        stale_failures = [u for u, f in _cache_failures.items() if now - f.get("failed_at", 0) >= CACHE_MAX_AGE]
+        if not stale and not stale_failures:
             return
         for u in stale:
             _SMILEMAKERS_CACHE.pop(u, None)
             _cache_times.pop(u, None)
-        manifest = {u: {"fetched_at": _cache_times[u], "result": list(r)}
-                    for u, r in _SMILEMAKERS_CACHE.items()}
-        _write_manifest(manifest)
-        logger.info("Cache eviction: removed %d stale entry/entries", len(stale))
+        for u in stale_failures:
+            _cache_failures.pop(u, None)
+        _write_manifest(_build_manifest(now))
+        logger.info("Cache eviction: removed %d stale entry/entries", len(stale) + len(stale_failures))
 
 
 _EVICTION_INTERVAL = 3_600  # check every hour
@@ -310,6 +411,7 @@ def fetch_smilemakers_product(url):
         return ("", "", "", None, [])
 
     result = ("", "", "", None, [])
+    failure_reason = "Fetch returned no product data"
     for attempt in range(1, 4):
         try:
             resp = requests.get(url, headers=headers, timeout=20)
@@ -364,12 +466,15 @@ def fetch_smilemakers_product(url):
             result = (name, desc, image_url, price, size_variants)
             break
         except requests.exceptions.Timeout:
+            failure_reason = "Request timed out"
             if attempt < 3:
                 time.sleep(1); continue
         except requests.exceptions.RequestException as exc:
+            failure_reason = str(exc)
             logger.error("Fetch failed for %s: %s", url, exc)
             break
         except Exception as exc:
+            failure_reason = str(exc)
             logger.error("Unexpected fetch error for %s: %s", url, exc, exc_info=True)
             break
 
@@ -378,6 +483,8 @@ def fetch_smilemakers_product(url):
     if result[0] or result[2]:  # name or image URL
         _SMILEMAKERS_CACHE[url] = result
         _persist_entry(url, result)
+    else:
+        _persist_failure(url, failure_reason)
     return result
 
 def extract_dominant_colors(image_url, n=5):
@@ -533,6 +640,147 @@ def resolve_items_for_preview(cfg):
 
 SIZE_ORDER = _SIZE_ORDER
 
+
+def _collect_smilemakers_urls(cfgs, include_cached=False):
+    load_disk_cache()
+    seen, urls = set(), []
+    with _manifest_lock:
+        cached = set(_SMILEMAKERS_CACHE)
+    for cfg in cfgs:
+        for page in cfg.get("pages", []):
+            for item in page.get("items", []):
+                if item.get("type") != "smilemakers":
+                    continue
+                for url in item.get("urls") or []:
+                    if not url or url in seen:
+                        continue
+                    if not include_cached and url in cached:
+                        continue
+                    seen.add(url)
+                    urls.append(url)
+    return urls
+
+
+def get_cache_warm_status():
+    with _warm_lock:
+        return dict(_warm_state)
+
+
+def _set_warm_state(**updates):
+    with _warm_lock:
+        _warm_state.update(updates)
+
+
+def _run_cache_warm(urls, concurrency, label):
+    _set_warm_state(
+        running=True,
+        started_at=time.time(),
+        finished_at=None,
+        total=len(urls),
+        done=0,
+        succeeded=0,
+        failed=0,
+        message=f"{label}: warming {len(urls)} URL(s)",
+    )
+    if not urls:
+        _set_warm_state(
+            running=False,
+            finished_at=time.time(),
+            message=f"{label}: no URLs need warming",
+        )
+        return
+
+    def _fetch(url):
+        result = fetch_smilemakers_product(url)
+        return bool(result[0] or result[2])
+
+    workers = max(1, min(int(concurrency or DEFAULT_FETCH_CONCURRENCY), len(urls)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_fetch, url): url for url in urls}
+        for future in as_completed(futures):
+            ok = False
+            try:
+                ok = bool(future.result())
+            except Exception as exc:
+                _persist_failure(futures[future], str(exc))
+            with _warm_lock:
+                _warm_state["done"] += 1
+                if ok:
+                    _warm_state["succeeded"] += 1
+                else:
+                    _warm_state["failed"] += 1
+                _warm_state["message"] = (
+                    f"{label}: {_warm_state['done']}/{_warm_state['total']} URL(s) checked"
+                )
+
+    with _warm_lock:
+        _warm_state["running"] = False
+        _warm_state["finished_at"] = time.time()
+        _warm_state["message"] = (
+            f"{label}: {_warm_state['succeeded']}/{_warm_state['total']} loaded, "
+            f"{_warm_state['failed']} failed"
+        )
+
+
+def start_cache_warm(cfgs, include_cached=False, label="Warm all stores"):
+    urls = _collect_smilemakers_urls(cfgs, include_cached=include_cached)
+    concurrency = max(
+        (c.get("settings", {}).get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY) for c in cfgs),
+        default=DEFAULT_FETCH_CONCURRENCY,
+    )
+    with _warm_lock:
+        if _warm_state.get("running"):
+            return False, dict(_warm_state)
+    _set_warm_state(
+        running=True,
+        started_at=time.time(),
+        finished_at=None,
+        total=len(urls),
+        done=0,
+        succeeded=0,
+        failed=0,
+        message=f"{label}: queued {len(urls)} URL(s)",
+    )
+    threading.Thread(
+        target=_run_cache_warm,
+        args=(urls, concurrency, label),
+        name="smilemakers-cache-warm",
+        daemon=True,
+    ).start()
+    return True, get_cache_warm_status()
+
+
+def start_cache_refetch_urls(urls, concurrency=DEFAULT_FETCH_CONCURRENCY, label="Refetch cache"):
+    unique = []
+    seen = set()
+    for url in urls:
+        if url and url not in seen:
+            seen.add(url)
+            unique.append(url)
+    with _warm_lock:
+        if _warm_state.get("running"):
+            return False, dict(_warm_state)
+    for url in unique:
+        clear_cache(url)
+    _set_warm_state(
+        running=True,
+        started_at=time.time(),
+        finished_at=None,
+        total=len(unique),
+        done=0,
+        succeeded=0,
+        failed=0,
+        message=f"{label}: queued {len(unique)} URL(s)",
+    )
+    threading.Thread(
+        target=_run_cache_warm,
+        args=(unique, concurrency, label),
+        name="smilemakers-cache-refetch",
+        daemon=True,
+    ).start()
+    return True, get_cache_warm_status()
+
+
 def prefetch_new_urls(cfg):
     """Fetch any SmileMakers URLs in cfg that are not yet cached.
     Intended to run in a background thread immediately after a config save so
@@ -558,16 +806,8 @@ def warm_cache():
     load_disk_cache()
     from config import list_store_nums, load_config as _load
     store_nums = list_store_nums()
-    all_cfgs = [_load(s) for s in store_nums] if store_nums else [load_config()]
-    seen, urls = set(), []
-    for cfg in all_cfgs:
-        for page in cfg.get("pages", []):
-            for item in page.get("items", []):
-                if item.get("type") == "smilemakers":
-                    for u in (item.get("urls") or []):
-                        if u and u not in _SMILEMAKERS_CACHE and u not in seen:
-                            seen.add(u)
-                            urls.append(u)
+    all_cfgs = [_load(s) for s in store_nums]
+    urls = _collect_smilemakers_urls(all_cfgs)
     if not urls:
         print("  Cache already warm.")
         return

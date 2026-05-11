@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Pickle Points &mdash; Admin Dashboard</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -30,6 +31,61 @@ body.dark-mode {
   --bg:     #141311;
   --panel:  #1D1B18;
   color: #ECE7DD;
+}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder { color: #776F64; }
+body.dark-mode input[type=file]::file-selector-button {
+  background: #24211E;
+  color: #ECE7DD;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+body.dark-mode input[type=checkbox] { accent-color: var(--yellow); }
+body.dark-mode .flash-ok {
+  background: #172412;
+  border-color: #4A6B1F;
+  color: #BFE0A0;
+}
+body.dark-mode .flash-err {
+  background: #2A1110;
+  border-color: #DA291C;
+  color: #FFB8B2;
+}
+body.dark-mode .admin-badge {
+  background: #3A2D00;
+  color: #FFD761;
+}
+body.dark-mode .store-tag {
+  background: #1D2A15;
+  color: #BFE0A0;
+}
+body.dark-mode .no-pw-badge {
+  background: #2A1110;
+  color: #FFB8B2;
+}
+body.dark-mode .status-cached {
+  background: #172412;
+  color: #BFE0A0;
+}
+body.dark-mode .status-failed {
+  background: #2A1110;
+  color: #FFB8B2;
+}
+body.dark-mode .status-missing {
+  background: #30270E;
+  color: #FFD761;
+}
+body.dark-mode .cache-progress {
+  background: #11100F;
+}
+body.dark-mode .danger-zone { border-top-color: #5C493D; }
+body.dark-mode .btn-outline:hover {
+  background: #24211E;
+  color: #fff;
+}
+body.dark-mode button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
 }
 body.dark-mode { color-scheme: dark; }
 body.dark-mode input,
@@ -73,7 +129,7 @@ body.dark-mode .store-checklist {
 .topbar-form { display: flex; }
 
 /* ── Content ── */
-.container { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
+.container { max-width: 1120px; margin: 0 auto; padding: 28px 20px; }
 .page-title { font-size: 20px; font-weight: 800; color: var(--dark); margin-bottom: 6px; }
 .page-sub   { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
 
@@ -90,8 +146,20 @@ body.dark-mode .store-checklist {
   margin-bottom: 14px; margin-top: 32px;
 }
 .section-header:first-child { margin-top: 0; }
+.section-header.flush-top { margin-top: 0; }
+.section-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.section-header .push-right { margin-left: auto; }
 .section-title { font-size: 16px; font-weight: 800; color: var(--dark); }
 .section-count { font-size: 11px; color: var(--muted); }
+.section-toggle {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
 
 /* ── Users table ── */
 .users-wrap {
@@ -131,6 +199,20 @@ body.dark-mode .store-checklist {
   font-size: 11px;
 }
 .cache-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.cache-status-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cache-status {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.status-cached { background: #e0edd0; color: var(--pickle); }
+.status-failed { background: #fff0f0; color: var(--red); }
+.status-missing { background: #fff4cf; color: #9a6a00; }
 .cache-thumb {
   width: 42px;
   height: 42px;
@@ -169,6 +251,44 @@ body.dark-mode .store-checklist {
 .add-user-form .form-title {
   font-size: 11px; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px;
+}
+.form-title.spaced { margin-top: 14px; }
+.store-admin-panel { margin-bottom: 16px; }
+.create-store-form { max-width: 340px; }
+.import-stores-form { max-width: 420px; }
+.cache-actions { margin-bottom: 12px; }
+.cache-panel-table { margin-bottom: 0; }
+.cache-progress {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.cache-progress-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 7px;
+}
+.cache-progress-meter {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  display: block;
+}
+.cache-progress-meter::-webkit-progress-bar { background: var(--border); }
+.cache-progress-meter::-webkit-progress-value { background: var(--pickle); }
+.cache-progress-meter::-moz-progress-bar { background: var(--pickle); }
+.cache-progress-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* ── Modal overlay ── */
@@ -234,33 +354,57 @@ body.dark-mode .store-checklist {
 .empty-state small { font-size: 12px; }
 
 /* ── Store cards ── */
-.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 14px; }
 .store-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
 }
 .card-head {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
   background: var(--dark);
   border-bottom: 2px solid var(--yellow);
 }
 .card-head .store-num { font-size: 18px; font-weight: 800; color: var(--yellow); }
-.card-head .meta { flex: 1; }
+.card-head .meta { flex: 1; min-width: 0; }
 .card-head .meta-row { font-size: 11px; color: #aaa; }
 .card-head .meta-row strong { color: #ccc; }
-.card-body { padding: 14px 16px; }
+.card-head .editor-name { color: #aaa; font-weight: 400; }
+.card-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
 /* Action sections */
-.action-section { margin-bottom: 14px; }
+.action-section { margin-bottom: 0; }
 .action-label {
   font-size: 10px; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;
 }
+.action-label.danger-label { color: var(--red); }
 .action-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.notes-save { margin-top: 6px; }
+.empty-state.compact { padding: 28px 20px; }
+.modal-field.tight { margin-bottom: 0; }
+.store-check-item.plain {
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.modal-title.danger-title { color: var(--red); }
+.delete-copy {
+  font-size: 13px;
+  color: var(--dark);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
 
 /* Buttons */
 .btn {
@@ -332,10 +476,10 @@ body.dark-mode .store-checklist {
   {% endif %}
 
   <!-- ── Users ── -->
-  <div class="section-header" style="margin-top:0">
+  <div class="section-header flush-top">
     <div class="section-title">Users</div>
     <div class="section-count">{{ users|length }} account{{ 's' if users|length != 1 else '' }}</div>
-    <button class="btn btn-edit btn-sm" onclick="openUserModal()" style="margin-left:auto">+ Add User</button>
+    <button class="btn btn-edit btn-sm push-right" onclick="openUserModal()">+ Add User</button>
   </div>
 
   {% if users %}
@@ -396,18 +540,18 @@ body.dark-mode .store-checklist {
     <div class="section-count">{{ stores|length }} store{{ 's' if stores|length != 1 else '' }}</div>
   </div>
 
-  <div class="add-user-form" style="margin-bottom:16px">
+  <div class="add-user-form store-admin-panel">
     <div class="form-title">Create New Store</div>
-    <form method="POST" action="/admin/stores/create" class="inline-form" style="max-width:340px">
+    <form method="POST" action="/admin/stores/create" class="inline-form create-store-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="text" name="store_num" placeholder="Store number, e.g. 1001"
-             spellcheck="false" inputmode="numeric" style="flex:1">
+             spellcheck="false" inputmode="numeric">
       <button type="submit" class="btn btn-edit">Create</button>
     </form>
-    <div class="form-title" style="margin-top:14px">All Store Configs</div>
+    <div class="form-title spaced">All Store Configs</div>
     <div class="action-row">
       <a class="btn btn-dl" href="/admin/stores/export.zip">Export Zip</a>
-      <form method="POST" action="/admin/stores/import" enctype="multipart/form-data" class="inline-form" style="max-width:420px">
+      <form method="POST" action="/admin/stores/import" enctype="multipart/form-data" class="inline-form import-stores-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="file" name="stores_zip" accept=".zip">
         <button type="submit" class="btn btn-outline">Import Zip</button>
@@ -437,7 +581,7 @@ body.dark-mode .store-checklist {
           <div class="meta-row">
             Last saved:
             <strong>{{ s.last_modified | int | timestamp_to_str }}</strong>
-            {% if s.last_edited_by %}<span style="color:#aaa;font-weight:400"> by {{ s.last_edited_by }}</span>{% endif %}
+            {% if s.last_edited_by %}<span class="editor-name"> by {{ s.last_edited_by }}</span>{% endif %}
           </div>
           {% else %}
           <div class="meta-row">No config saved yet</div>
@@ -488,13 +632,13 @@ body.dark-mode .store-checklist {
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <textarea class="notes-ta" name="notes" rows="3"
                       placeholder="Internal notes visible only to admins…">{{ s.notes }}</textarea>
-            <button type="submit" class="btn btn-outline btn-sm" style="margin-top:6px">Save Notes</button>
+            <button type="submit" class="btn btn-outline btn-sm notes-save">Save Notes</button>
           </form>
         </div>
 
         <!-- Delete store -->
         <div class="danger-zone">
-          <div class="action-label" style="color:#DA291C">Danger Zone</div>
+          <div class="action-label danger-label">Danger Zone</div>
           <button type="button" class="btn btn-danger"
                   onclick="openDeleteModal('{{ s.num }}')">Delete Store</button>
         </div>
@@ -506,76 +650,96 @@ body.dark-mode .store-checklist {
   {% endif %}
 
   <!-- ── Cache (collapsed) ── -->
-  <div class="section-header" style="cursor:pointer;margin-top:32px;user-select:none" onclick="toggleCache()">
+  <div class="section-header clickable" onclick="toggleCache()">
     <div class="section-title">SmileMakers Cache</div>
-    <div class="section-count">{{ cache_entries|length }} cached URL{{ 's' if cache_entries|length != 1 else '' }}</div>
-    <span id="cache-toggle-icon" style="margin-left:auto;font-size:11px;color:var(--muted);font-weight:600">&#9654; Show</span>
+    <div class="section-count" id="cache-header-count">{{ cache_entries|length }} cached URL{{ 's' if cache_entries|length != 1 else '' }}</div>
+    <span id="cache-toggle-icon" class="section-toggle">&#9654; Show</span>
   </div>
-  <div id="cache-body" style="display:none">
-    <div class="add-user-form" style="margin-bottom:16px">
-      <div class="action-row" style="margin-bottom:12px">
-        <form method="POST" action="/admin/cache/warm-all">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-edit">Warm All Stores</button>
-        </form>
-        <form method="POST" action="/admin/cache/clear-all"
-              onsubmit="return confirm('Clear the entire SmileMakers cache?')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-danger">Clear All Cache</button>
-        </form>
+  <div id="cache-body" hidden>
+    <div class="add-user-form store-admin-panel">
+      <div class="action-row cache-actions">
+        <button type="button" class="btn btn-edit"    onclick="cacheWarmAll()">Warm All Stores</button>
+        <button type="button" class="btn btn-outline" onclick="cacheRefetchNeeded()">Refetch Needed</button>
+        <button type="button" class="btn btn-danger"  onclick="cacheClearAll()">Clear All Cache</button>
       </div>
 
-      {% if cache_entries %}
-      <div class="users-wrap" style="margin-bottom:0">
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Cached URL</th>
-              <th>Fetched</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in cache_entries %}
-            <tr>
-              <td>
-                {% if entry.image %}<img class="cache-thumb" src="{{ entry.image }}" alt="">{% endif %}
-                <div class="cache-meta">{{ entry.name or 'No title cached' }}</div>
-                {% if entry.price is not none %}<div class="cache-meta">${{ '%.2f'|format(entry.price) }}</div>{% endif %}
-              </td>
-              <td>
-                <form method="POST" action="/admin/cache/refetch-url" class="inline-form">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input class="cache-url-input" type="text" name="url" value="{{ entry.url }}" spellcheck="false">
-                  <button type="submit" class="btn btn-outline">Refetch</button>
-                </form>
-              </td>
-              <td>
-                {% if entry.fetched_at %}
-                <span class="cache-meta">{{ entry.fetched_at | int | timestamp_to_str }}</span>
-                {% else %}
-                <span class="cache-meta">Unknown</span>
-                {% endif %}
-              </td>
-              <td>
-                <form method="POST" action="/admin/cache/clear-url">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="url" value="{{ entry.url }}">
-                  <button type="submit" class="btn btn-danger btn-sm">Clear</button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <div class="empty-state" style="padding:28px 20px">
-        <p>No cached SmileMakers products yet.</p>
-        <small>Warm all stores or fetch products from the editor to populate this list.</small>
+      <div id="cache-progress-area">
+      {% if cache_warm_status %}
+      {% set total = cache_warm_status.total or 0 %}
+      {% set done = cache_warm_status.done or 0 %}
+      <div class="cache-progress">
+        <div class="cache-progress-title">
+          <span class="cache-status {{ 'status-missing' if cache_warm_status.running else 'status-cached' }}">
+            {{ 'Running' if cache_warm_status.running else 'Idle' }}
+          </span>
+          <span>{{ cache_warm_status.message }}</span>
+        </div>
+        <progress class="cache-progress-meter" value="{{ done }}" max="{{ total or 1 }}"></progress>
+        <div class="cache-progress-meta">
+          {{ done }}/{{ total }} checked,
+          {{ cache_warm_status.succeeded or 0 }} loaded,
+          {{ cache_warm_status.failed or 0 }} failed
+          {% if cache_warm_status.finished_at %} · finished {{ cache_warm_status.finished_at | relative_time }}{% endif %}
+        </div>
       </div>
       {% endif %}
+      </div>
+
+      <div id="cache-table-wrap" {% if not cache_entries %}style="display:none"{% endif %}>
+        <div class="users-wrap cache-panel-table">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Cached URL</th>
+                <th>Fetched</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cache-tbody">
+              {% for entry in cache_entries %}
+              <tr>
+                <td>
+                  {% if entry.image %}<img class="cache-thumb" src="{{ entry.image }}" alt="">{% endif %}
+                  <div class="cache-status-line">
+                    <span class="cache-status status-{{ entry.status }}">{{ entry.status }}</span>
+                    {% if not entry.configured %}<span class="cache-meta">not in current stores</span>{% endif %}
+                  </div>
+                  <div class="cache-meta">{{ entry.name or entry.error or 'No title cached' }}</div>
+                  {% if entry.price is not none %}<div class="cache-meta">${{ '%.2f'|format(entry.price) }}</div>{% endif %}
+                </td>
+                <td>
+                  <div class="inline-form">
+                    <input class="cache-url-input" type="text" value="{{ entry.url }}" spellcheck="false">
+                    <button type="button" class="btn btn-outline" onclick="cacheRefetchUrl(this)">Refetch</button>
+                  </div>
+                </td>
+                <td>
+                  {% if entry.fetched_at %}
+                  <span class="cache-meta">{{ entry.fetched_at | relative_time }}</span>
+                  <div class="cache-meta">{{ entry.fetched_at | int | timestamp_to_str }}</div>
+                  {% elif entry.failed_at %}
+                  <span class="cache-meta">Failed {{ entry.failed_at | relative_time }}</span>
+                  <div class="cache-meta">{{ entry.failed_at | int | timestamp_to_str }}</div>
+                  {% else %}
+                  <span class="cache-meta">Not cached yet</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <button type="button" class="btn btn-danger btn-sm" onclick="cacheClearUrl('{{ entry.url }}', this)">Clear</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div id="cache-empty-wrap" {% if cache_entries %}style="display:none"{% endif %}>
+        <div class="empty-state compact">
+          <p>No cached SmileMakers products yet.</p>
+          <small>Warm all stores or fetch products from the editor to populate this list.</small>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -610,8 +774,8 @@ body.dark-mode .store-checklist {
             {% endfor %}
           </div>
         </div>
-        <div class="modal-field" style="margin-bottom:0">
-          <label class="store-check-item" style="font-size:12px;text-transform:none;letter-spacing:0">
+        <div class="modal-field tight">
+          <label class="store-check-item plain">
             <input type="checkbox" name="is_admin"> Grant admin access
           </label>
         </div>
@@ -628,14 +792,14 @@ body.dark-mode .store-checklist {
 <div id="modal-delete-store" class="modal-overlay" onclick="if(event.target===this)closeDeleteModal()">
   <div class="modal-dialog">
     <div class="modal-head">
-      <span class="modal-title" style="color:var(--red)">&#x26A0; Delete Store</span>
+      <span class="modal-title danger-title">&#x26A0; Delete Store</span>
       <button class="modal-close" onclick="closeDeleteModal()" aria-label="Close">&times;</button>
     </div>
     <form id="delete-store-form" method="POST" action="" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="confirm_store_num" id="delete-confirm-hidden">
       <div class="modal-body">
-        <p style="font-size:13px;color:var(--dark);margin-bottom:12px;line-height:1.5">
+        <p class="delete-copy">
           This will permanently delete <strong id="delete-store-label">Store #?</strong> and all its config data.<br>
           A backup will be saved first, but this action is not easily reversible.
         </p>
@@ -655,8 +819,11 @@ body.dark-mode .store-checklist {
 </div>
 
 <script>
+var PICKLE_CSRF = document.querySelector('meta[name="csrf-token"]').content;
 var _deleteTarget = null;
+var _cachePoller = null;
 
+// ── Delete modal ────────────────────────────────────────────────
 function openDeleteModal(storeNum) {
   _deleteTarget = storeNum;
   document.getElementById('delete-store-label').textContent = 'Store #' + storeNum;
@@ -678,14 +845,7 @@ function checkDeleteMatch() {
   document.getElementById('delete-confirm-btn').disabled = !match;
 }
 
-function toggleCache() {
-  var body = document.getElementById('cache-body');
-  var icon = document.getElementById('cache-toggle-icon');
-  var open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  icon.innerHTML = open ? '&#9660; Hide' : '&#9654; Show';
-}
-
+// ── User modal ──────────────────────────────────────────────────
 function openUserModal() {
   document.getElementById('modal-add-user').classList.add('open');
   document.getElementById('m_real_name').focus();
@@ -694,11 +854,161 @@ function closeUserModal() {
   document.getElementById('modal-add-user').classList.remove('open');
 }
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    closeDeleteModal();
-    closeUserModal();
-  }
+  if (e.key === 'Escape') { closeDeleteModal(); closeUserModal(); }
 });
+
+// ── Cache panel toggle (persisted) ─────────────────────────────
+function toggleCache() {
+  var body = document.getElementById('cache-body');
+  var icon = document.getElementById('cache-toggle-icon');
+  var open = body.hasAttribute('hidden');
+  body.toggleAttribute('hidden', !open);
+  icon.innerHTML = open ? '&#9660; Hide' : '&#9654; Show';
+  sessionStorage.setItem('cacheOpen', open ? '1' : '0');
+  if (open) pollCacheStatus();
+}
+(function() {
+  if (sessionStorage.getItem('cacheOpen') === '1') {
+    var body = document.getElementById('cache-body');
+    var icon = document.getElementById('cache-toggle-icon');
+    body.removeAttribute('hidden');
+    icon.innerHTML = '&#9660; Hide';
+    pollCacheStatus();
+  }
+})();
+
+// ── Cache AJAX helpers ──────────────────────────────────────────
+function cachePost(url, extra) {
+  var fd = new FormData();
+  fd.append('csrf_token', PICKLE_CSRF);
+  Object.entries(extra || {}).forEach(function(kv) { fd.append(kv[0], kv[1]); });
+  return fetch(url, { method: 'POST', headers: { 'X-Pickle-Ajax': '1' }, body: fd })
+    .then(function(r) { return r.json(); });
+}
+
+function startCachePolling() {
+  stopCachePolling();
+  pollCacheStatus();
+  _cachePoller = setInterval(pollCacheStatus, 1000);
+}
+function stopCachePolling() {
+  if (_cachePoller) { clearInterval(_cachePoller); _cachePoller = null; }
+}
+function pollCacheStatus() {
+  fetch('/admin/cache/status')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      updateCacheUI(data);
+      if (!data.warm_status || !data.warm_status.running) stopCachePolling();
+    })
+    .catch(function() {});
+}
+
+// ── DOM update ──────────────────────────────────────────────────
+function updateCacheUI(data) {
+  var pa = document.getElementById('cache-progress-area');
+  if (pa) pa.innerHTML = renderProgressHtml(data.warm_status);
+
+  var badge = document.getElementById('cache-header-count');
+  if (badge) badge.textContent = data.count + ' cached URL' + (data.count !== 1 ? 's' : '');
+
+  var tbody    = document.getElementById('cache-tbody');
+  var tableWrap = document.getElementById('cache-table-wrap');
+  var emptyWrap = document.getElementById('cache-empty-wrap');
+  if (data.entries && data.entries.length) {
+    if (tbody) tbody.innerHTML = data.entries.map(renderCacheRow).join('');
+    if (tableWrap) tableWrap.style.display = '';
+    if (emptyWrap) emptyWrap.style.display = 'none';
+  } else {
+    if (tableWrap) tableWrap.style.display = 'none';
+    if (emptyWrap) emptyWrap.style.display = '';
+  }
+}
+
+function renderProgressHtml(ws) {
+  if (!ws || !ws.message) return '';
+  var total = ws.total || 0, done = ws.done || 0;
+  return '<div class="cache-progress">'
+    + '<div class="cache-progress-title">'
+    + '<span class="cache-status ' + (ws.running ? 'status-missing' : 'status-cached') + '">'
+    + (ws.running ? 'Running' : 'Idle') + '</span>'
+    + '<span>' + hesc(ws.message || '') + '</span>'
+    + '</div>'
+    + '<progress class="cache-progress-meter" value="' + done + '" max="' + (total || 1) + '"></progress>'
+    + '<div class="cache-progress-meta">'
+    + done + '/' + total + ' checked, '
+    + (ws.succeeded || 0) + ' loaded, '
+    + (ws.failed || 0) + ' failed'
+    + (ws.finished_at ? ' &middot; finished ' + relTime(ws.finished_at) : '')
+    + '</div></div>';
+}
+
+function renderCacheRow(e) {
+  var img  = e.image ? '<img class="cache-thumb" src="' + hesc(e.image) + '" alt="">' : '';
+  var notCfg = !e.configured ? '<span class="cache-meta">not in current stores</span>' : '';
+  var price  = e.price != null ? '<div class="cache-meta">$' + e.price.toFixed(2) + '</div>' : '';
+  var label  = e.name || e.error || 'No title cached';
+  var timeHtml;
+  if (e.fetched_at) {
+    timeHtml = '<span class="cache-meta">' + relTime(e.fetched_at) + '</span>'
+             + '<div class="cache-meta">' + fmtDate(e.fetched_at) + '</div>';
+  } else if (e.failed_at) {
+    timeHtml = '<span class="cache-meta">Failed ' + relTime(e.failed_at) + '</span>'
+             + '<div class="cache-meta">' + fmtDate(e.failed_at) + '</div>';
+  } else {
+    timeHtml = '<span class="cache-meta">Not cached yet</span>';
+  }
+  return '<tr>'
+    + '<td>' + img
+    + '<div class="cache-status-line"><span class="cache-status status-' + hesc(e.status) + '">' + hesc(e.status) + '</span>' + notCfg + '</div>'
+    + '<div class="cache-meta">' + hesc(label) + '</div>' + price + '</td>'
+    + '<td><div class="inline-form">'
+    + '<input class="cache-url-input" type="text" value="' + hesc(e.url) + '" spellcheck="false">'
+    + '<button type="button" class="btn btn-outline" onclick="cacheRefetchUrl(this)">Refetch</button>'
+    + '</div></td>'
+    + '<td>' + timeHtml + '</td>'
+    + '<td><button type="button" class="btn btn-danger btn-sm" onclick="cacheClearUrl(\'' + hesc(e.url) + '\',this)">Clear</button></td>'
+    + '</tr>';
+}
+
+// ── Cache actions ───────────────────────────────────────────────
+function cacheWarmAll() {
+  cachePost('/admin/cache/warm-all').then(startCachePolling);
+}
+function cacheRefetchNeeded() {
+  cachePost('/admin/cache/refetch-needed').then(startCachePolling);
+}
+function cacheClearAll() {
+  if (!confirm('Clear the entire SmileMakers cache?')) return;
+  cachePost('/admin/cache/clear-all').then(pollCacheStatus);
+}
+function cacheClearUrl(url, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  cachePost('/admin/cache/clear-url', { url: url }).then(pollCacheStatus);
+}
+function cacheRefetchUrl(btn) {
+  var input = btn.closest('.inline-form').querySelector('input');
+  var url = input ? input.value.trim() : '';
+  if (!url) return;
+  btn.disabled = true; btn.textContent = 'Fetching…';
+  cachePost('/admin/cache/refetch-url', { url: url }).then(function() {
+    btn.disabled = false; btn.textContent = 'Refetch';
+    pollCacheStatus();
+  });
+}
+
+// ── Utilities ───────────────────────────────────────────────────
+function relTime(ts) {
+  var diff = Date.now() / 1000 - ts;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return Math.floor(diff / 60) + ' min ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' hr ago';
+  return Math.floor(diff / 86400) + ' days ago';
+}
+function fmtDate(ts) { return new Date(ts * 1000).toLocaleString(); }
+function hesc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 </script>
 </body>
 </html>

@@ -21,8 +21,10 @@ from config import (audit_log, backup_config, delete_store_config,
                     store_config_exists)
 from config_schema import validate_config
 from preview_render import render_preview_html
-from services import (cache_entries, clear_cache, fetch_smilemakers_product,
-                      prefetch_new_urls, resolve_items_for_preview)
+from services import (cache_entries, cache_entries_for_urls, clear_cache,
+                      fetch_smilemakers_product, get_cache_warm_status,
+                      prefetch_new_urls, resolve_items_for_preview,
+                      start_cache_refetch_urls, start_cache_warm)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,21 @@ def _record_failed_login(ip: str):
 def _clear_failed_logins(ip: str):
     with _rate_lock:
         _failed_logins.pop(ip, None)
+
+
+def _brief_list(items, limit=5):
+    values = [str(item) for item in items if str(item)]
+    if len(values) <= limit:
+        return ", ".join(values)
+    return ", ".join(values[:limit]) + f", +{len(values) - limit} more"
+
+
+def _json_error(exc):
+    if isinstance(exc, json.JSONDecodeError):
+        return f"invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}"
+    if isinstance(exc, UnicodeDecodeError):
+        return "file must be UTF-8 encoded JSON"
+    return str(exc)
 
 
 # ── Decorators ────────────────────────────────────────────────────
@@ -318,13 +335,17 @@ def register_routes(app):
             return "", 204
         try:
             cfg    = request.get_json(force=True)
+            validate_config(cfg)
             editor = session.get("real_name", "unknown")
             if session.get("admin_editing"):
                 editor += " (Admin)"
             save_config(cfg, session["store"], editor=editor)
             threading.Thread(target=prefetch_new_urls, args=(cfg,), daemon=True).start()
             return jsonify({"ok": True})
-        except (OSError, ValueError) as exc:
+        except ValueError as exc:
+            logger.warning("Config validation failed for store %s: %s", session.get("store"), exc)
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        except OSError as exc:
             logger.error("Config save failed for store %s: %s", session.get("store"), exc)
             return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -382,9 +403,15 @@ def register_routes(app):
     @admin_required
     def admin_dashboard():
         stores = []
-        for num in sorted(list_store_nums()):
+        store_nums = sorted(list_store_nums())
+        cfgs = []
+        for num in store_nums:
             meta = get_store_metadata(num)
             stores.append({"num": num, **meta})
+            cfgs.append(load_config(num))
+        smilemakers_urls = []
+        for cfg in cfgs:
+            smilemakers_urls.extend(_smilemakers_urls(cfg))
         users = list_users()
         msgs  = get_flashed_messages(with_categories=True)
         user = get_user(user_id=session["user_id"])
@@ -395,7 +422,8 @@ def register_routes(app):
             stores=stores,
             users=users,
             messages=msgs,
-            cache_entries=cache_entries(),
+            cache_entries=cache_entries_for_urls(smilemakers_urls),
+            cache_warm_status=get_cache_warm_status(),
             dark_mode=dark_mode,
         )
 
@@ -419,10 +447,14 @@ def register_routes(app):
     def admin_cache_clear_url():
         url = request.form.get("url", "").strip()
         if not url:
+            if request.headers.get("X-Pickle-Ajax") == "1":
+                return jsonify({"ok": False, "error": "No URL provided."})
             flash("No cache URL provided.", "err")
         else:
             clear_cache(url)
             audit_log("clear_cache_url", f"by={session.get('username')} url={url}")
+            if request.headers.get("X-Pickle-Ajax") == "1":
+                return jsonify({"ok": True})
             flash("Cached URL cleared.", "ok")
         return redirect(url_for("admin_dashboard"))
 
@@ -431,15 +463,16 @@ def register_routes(app):
     def admin_cache_refetch_url():
         url = request.form.get("url", "").strip()
         if not url:
+            if request.headers.get("X-Pickle-Ajax") == "1":
+                return jsonify({"ok": False, "error": "No URL provided."})
             flash("No cache URL provided.", "err")
         else:
             clear_cache(url)
             name, _, image, _, _ = fetch_smilemakers_product(url)
-            if name or image:
-                flash("Cached URL refreshed.", "ok")
-            else:
-                flash("URL refetch returned no product data.", "err")
             audit_log("refetch_cache_url", f"by={session.get('username')} url={url}")
+            if request.headers.get("X-Pickle-Ajax") == "1":
+                return jsonify({"ok": bool(name or image)})
+            flash("Cached URL refreshed." if (name or image) else "URL refetch returned no product data.", "ok" if (name or image) else "err")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/cache/clear-all", methods=["POST"])
@@ -448,18 +481,77 @@ def register_routes(app):
         count = len(cache_entries())
         clear_cache()
         audit_log("clear_cache_all", f"by={session.get('username')} count={count}")
+        if request.headers.get("X-Pickle-Ajax") == "1":
+            return jsonify({"ok": True, "count": count})
         flash(f"Cleared {count} cache entr{'y' if count == 1 else 'ies'}.", "ok")
         return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/status")
+    @admin_required
+    def admin_cache_status():
+        store_nums = sorted(list_store_nums())
+        cfgs = [load_config(num) for num in store_nums]
+        urls = []
+        for cfg in cfgs:
+            urls.extend(_smilemakers_urls(cfg))
+        entries = cache_entries_for_urls(urls)
+        warm = get_cache_warm_status()
+        def _fmt(e):
+            return {
+                "url": e["url"],
+                "status": e.get("status", "missing"),
+                "configured": e.get("configured", False),
+                "name": e.get("name") or "",
+                "image": e.get("image") or "",
+                "price": e.get("price"),
+                "fetched_at": e.get("fetched_at"),
+                "failed_at": e.get("failed_at"),
+                "error": e.get("error") or "",
+            }
+        return jsonify({
+            "warm_status": warm,
+            "entries": [_fmt(e) for e in entries],
+            "count": len(entries),
+        })
 
     @app.route("/admin/cache/warm-all", methods=["POST"])
     @admin_required
     def admin_cache_warm_all():
         store_nums = list_store_nums()
         cfgs = [load_config(num) for num in store_nums]
-        for cfg in cfgs:
-            threading.Thread(target=prefetch_new_urls, args=(cfg,), daemon=True).start()
+        started, state = start_cache_warm(cfgs, include_cached=False, label="Warm all stores")
         audit_log("warm_cache_all", f"by={session.get('username')} stores={len(store_nums)}")
-        flash(f"Started cache warming for {len(store_nums)} store{'' if len(store_nums) == 1 else 's'}.", "ok")
+        if request.headers.get("X-Pickle-Ajax") == "1":
+            return jsonify({"ok": True, "started": started})
+        if started:
+            flash(f"Started cache warming for {len(store_nums)} store{'' if len(store_nums) == 1 else 's'}; {state['total']} URL{'' if state['total'] == 1 else 's'} queued.", "ok")
+        else:
+            flash(f"Cache warming is already running: {state['done']}/{state['total']} URL{'' if state['total'] == 1 else 's'} checked.", "err")
+        return redirect(url_for("admin_dashboard"))
+
+    @app.route("/admin/cache/refetch-needed", methods=["POST"])
+    @admin_required
+    def admin_cache_refetch_needed():
+        store_nums = list_store_nums()
+        cfgs = [load_config(num) for num in store_nums]
+        urls = []
+        for cfg in cfgs:
+            urls.extend(_smilemakers_urls(cfg))
+        rows = cache_entries_for_urls(urls)
+        targets = [row["url"] for row in rows if row.get("configured") and row.get("status") in {"failed", "missing"}]
+        if not targets:
+            if request.headers.get("X-Pickle-Ajax") == "1":
+                return jsonify({"ok": True, "started": False, "message": "Nothing to refetch."})
+            flash("No failed or uncached SmileMakers URLs need refetching.", "ok")
+            return redirect(url_for("admin_dashboard"))
+        started, state = start_cache_refetch_urls(targets, label="Refetch needed URLs")
+        audit_log("refetch_needed_cache", f"by={session.get('username')} count={len(targets)}")
+        if request.headers.get("X-Pickle-Ajax") == "1":
+            return jsonify({"ok": True, "started": started})
+        if started:
+            flash(f"Started refetch for {len(targets)} failed or uncached URL{'' if len(targets) == 1 else 's'}.", "ok")
+        else:
+            flash(f"Cache warming is already running: {state['done']}/{state['total']} URL{'' if state['total'] == 1 else 's'} checked.", "err")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/store/<store_num>/copy-config", methods=["POST"])
@@ -499,15 +591,18 @@ def register_routes(app):
             flash("No file selected.", "err")
         else:
             try:
-                data = f.read(10 * 1024 * 1024)
+                limit = 10 * 1024 * 1024
+                data = f.read(limit + 1)
+                if len(data) > limit:
+                    raise ValueError("JSON file is too large; max size is 10 MB")
                 cfg  = json.loads(data.decode("utf-8"))
                 validate_config(cfg)
                 backup_config(store_num)
                 save_config(cfg, store_num, editor=f"{session.get('real_name', 'Admin')} (Admin)")
                 audit_log("upload_config", f"by={session.get('username')} store={store_num}")
-                flash(f"Config replaced for Store #{store_num}.", "ok")
-            except (json.JSONDecodeError, ValueError) as exc:
-                flash(f"Upload rejected: {exc}", "err")
+                flash(f"Uploaded config for Store #{store_num}; backup saved first.", "ok")
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+                flash(f"Upload rejected for Store #{store_num}: {_json_error(exc)}", "err")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/store/<store_num>/delete", methods=["POST"])
@@ -569,26 +664,72 @@ def register_routes(app):
             flash("No zip file selected.", "err")
             return redirect(url_for("admin_dashboard"))
         try:
-            data = f.read(25 * 1024 * 1024)
-            imported = 0
+            limit = 25 * 1024 * 1024
+            data = f.read(limit + 1)
+            if len(data) > limit:
+                raise ValueError("zip file is too large; max size is 25 MB")
+            validated = []
+            skipped = []
+            failed = []
+            seen = set()
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                for name in zf.namelist():
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
+                    name = info.filename
                     base = name.rsplit("/", 1)[-1]
                     if not (base.startswith("store_") and base.endswith(".json")):
                         continue
-                    store_num = sanitize_store_num(base[6:-5])
+                    raw_store_num = base[6:-5]
+                    store_num = sanitize_store_num(raw_store_num)
                     if not store_num:
+                        skipped.append(f"{base} (invalid store number)")
                         continue
-                    cfg = json.loads(zf.read(name).decode("utf-8"))
-                    validate_config(cfg)
-                    if store_config_exists(store_num):
-                        backup_config(store_num)
-                    save_config(cfg, store_num, editor=f"{session.get('real_name', 'Admin')} (Admin import)")
-                    imported += 1
-            audit_log("import_all_stores", f"by={session.get('username')} count={imported}")
-            flash(f"Imported {imported} store config{'' if imported == 1 else 's'}.", "ok")
-        except (zipfile.BadZipFile, json.JSONDecodeError, ValueError, OSError) as exc:
-            flash(f"Import rejected: {exc}", "err")
+                    if store_num in seen:
+                        skipped.append(f"Store #{store_num} duplicate")
+                        continue
+                    seen.add(store_num)
+                    try:
+                        cfg = json.loads(zf.read(info).decode("utf-8"))
+                        validate_config(cfg)
+                        validated.append((store_num, cfg))
+                    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+                        failed.append(f"Store #{store_num}: {_json_error(exc)}")
+
+            if failed:
+                msg = "Import rejected before writing any configs. Failed: " + _brief_list(failed, limit=3)
+                if skipped:
+                    msg += ". Skipped: " + _brief_list(skipped, limit=3)
+                flash(msg, "err")
+                return redirect(url_for("admin_dashboard"))
+            if not validated:
+                msg = "Import rejected: no store_*.json config files found."
+                if skipped:
+                    msg += " Skipped: " + _brief_list(skipped, limit=3)
+                flash(msg, "err")
+                return redirect(url_for("admin_dashboard"))
+
+            imported = []
+            backed_up = []
+            for store_num, cfg in validated:
+                if store_config_exists(store_num):
+                    backup_config(store_num)
+                    backed_up.append(f"#{store_num}")
+                save_config(cfg, store_num, editor=f"{session.get('real_name', 'Admin')} (Admin import)")
+                imported.append(f"#{store_num}")
+
+            audit_log(
+                "import_all_stores",
+                f"by={session.get('username')} imported={len(imported)} skipped={len(skipped)} backups={len(backed_up)}",
+            )
+            msg = f"Imported {len(imported)} store config{'' if len(imported) == 1 else 's'}: {_brief_list(imported)}."
+            if backed_up:
+                msg += f" Backups saved for existing stores: {_brief_list(backed_up)}."
+            if skipped:
+                msg += f" Skipped: {_brief_list(skipped, limit=3)}."
+            flash(msg, "ok")
+        except (zipfile.BadZipFile, ValueError, OSError) as exc:
+            flash(f"Import rejected before writing any configs: {exc}", "err")
         return redirect(url_for("admin_dashboard"))
 
     @app.route("/admin/store/<store_num>/notes", methods=["POST"])
@@ -665,8 +806,12 @@ def register_routes(app):
                     error = str(exc)
 
         all_stores = sorted(list_store_nums())
+        current_user = get_user(user_id=session["user_id"])
+        dark_mode = bool(current_user and current_user.get("dark_mode"))
+        session["dark_mode"] = dark_mode
         return render_template("admin_edit_user.html",
-                               user=user, stores=stores, all_stores=all_stores, error=error)
+                               user=user, stores=stores, all_stores=all_stores,
+                               error=error, dark_mode=dark_mode)
 
     @app.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
     @admin_required

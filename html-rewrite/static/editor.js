@@ -10,6 +10,8 @@ let selectedTagName = null;
 let previewSelectedOnly = false;
 let itemFilterText = '';
 let userDarkMode = !!window.PICKLE_USER_DARK_MODE;
+let hasUnsavedChanges = false;
+let saveInFlight = false;
 
 // ──────────────────────────────────────────────────────────────────
 // Boot
@@ -33,6 +35,59 @@ function setStatus(msg, state) {
   el.textContent = msg;
   const colors = { ok: '#52b788', warn: '#e8a000', err: '#ff6b6b' };
   el.style.color = colors[state] ?? (state === true ? colors.err : '#aaa');
+}
+
+function markDirty() {
+  hasUnsavedChanges = true;
+}
+
+function hasPendingSave() {
+  return hasUnsavedChanges || !!_saveTimer || !!_settingsTimer || saveInFlight;
+}
+
+function markCleanIfIdle() {
+  if (!_saveTimer && !_settingsTimer && !saveInFlight) {
+    hasUnsavedChanges = false;
+  }
+}
+
+function confirmDiscardUnsavedChanges() {
+  if (!hasPendingSave()) return true;
+  return window.confirm('You have unsaved changes that may still be saving. Leave this page anyway?');
+}
+
+function wireUnsavedNavigationGuard() {
+  window.addEventListener('beforeunload', event => {
+    if (!hasPendingSave()) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  document.querySelectorAll('a[href]').forEach(link => {
+    if (link.target === '_blank') return;
+    link.addEventListener('click', event => {
+      if (!confirmDiscardUnsavedChanges()) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  const switcher = document.getElementById('store-switcher');
+  if (switcher) {
+    switcher.addEventListener('submit', event => {
+      if (!confirmDiscardUnsavedChanges()) {
+        event.preventDefault();
+      }
+    });
+  }
+}
+
+function submitStoreSwitcher(select) {
+  if (!confirmDiscardUnsavedChanges()) {
+    select.value = window.PICKLE_STORE_NUM || select.querySelector('option[selected]')?.value || select.value;
+    return;
+  }
+  select.form.submit();
 }
 
 function showUndoToast(message, onUndo) {
@@ -176,6 +231,40 @@ async function saveDarkModePreference(enabled) {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Context menu
+// ──────────────────────────────────────────────────────────────────
+function showCtxMenu(x, y, menuItems) {
+  const menu = document.getElementById('ctx-menu');
+  menu.innerHTML = '';
+  menuItems.forEach(item => {
+    if (item === 'sep') {
+      const hr = document.createElement('div');
+      hr.className = 'ctx-sep';
+      menu.appendChild(hr);
+      return;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'ctx-item' + (item.danger ? ' ctx-danger' : '');
+    btn.textContent = item.label;
+    btn.onclick = () => { hideCtxMenu(); item.action(); };
+    menu.appendChild(btn);
+  });
+  menu.style.display = 'block';
+  const mw = menu.offsetWidth || 170;
+  const mh = menu.offsetHeight || menuItems.length * 36;
+  menu.style.left = (x + mw > window.innerWidth  ? x - mw : x) + 'px';
+  menu.style.top  = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+}
+
+function hideCtxMenu() {
+  const menu = document.getElementById('ctx-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtxMenu(); });
+
+// ──────────────────────────────────────────────────────────────────
 // Pages list
 // ──────────────────────────────────────────────────────────────────
 function renderPages() {
@@ -186,6 +275,18 @@ function renderPages() {
     div.className = 'page-item' + (i === pageIdx ? ' selected' : '');
     div.textContent = (p.title || `Page ${i+1}`) + (p.type === 'earn' ? ' [earn]' : '');
     div.onclick = () => setPageIdx(i);
+    div.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      setPageIdx(i);
+      showCtxMenu(event.clientX, event.clientY, [
+        { label: '↑ Move Up',   action: () => movePage(-1) },
+        { label: '↓ Move Down', action: () => movePage(1) },
+        'sep',
+        { label: 'Duplicate',   action: () => dupPage() },
+        'sep',
+        { label: 'Delete',      action: () => delPage(), danger: true },
+      ]);
+    });
     wireDragRow(div, 'pages', i, (from, to) => {
       const pages = cfg.pages || [];
       if (!moveInArray(pages, from, to)) return;
@@ -334,6 +435,19 @@ function renderItems() {
     const div = document.createElement('div');
     div.className = 'item-row' + (i === itemIdx ? ' selected' : '');
     div.onclick = () => selectItem(i);
+    div.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      selectItem(i);
+      showCtxMenu(event.clientX, event.clientY, [
+        { label: '↑ Move Up',   action: () => moveItem(-1) },
+        { label: '↓ Move Down', action: () => moveItem(1) },
+        'sep',
+        { label: 'Duplicate',   action: () => dupItem() },
+        { label: 'Copy Fields from Previous', action: () => copyPreviousItemFields() },
+        'sep',
+        { label: 'Delete',      action: () => delItem(), danger: true },
+      ]);
+    });
     wireDragRow(div, 'items', i, (from, to) => {
       const page = currentPage();
       const items = page && page.items;
@@ -536,8 +650,6 @@ function buildSmEditor(ed, item) {
           <button onclick="urlAdd()">Add</button>
           <button onclick="urlReplace()">Replace</button>
           <button onclick="urlRemove()">Remove</button>
-          <button onclick="fetchUrlPreview()">Fetch Info</button>
-          <button onclick="fetchAllUrlPreviews()">Fetch All</button>
         </div>
         <div id="fetch-status"></div>
         <div id="fetch-errors">${fetchErrorsHtml(item)}</div>
@@ -557,7 +669,7 @@ function buildSmEditor(ed, item) {
       </select>
     </div>
     <hr class="ed-sep">
-    <div class="overrides-note">Overrides &mdash; blank = auto from URL &nbsp;<span style="font-weight:400;color:#aaa">(fetch info to see placeholders)</span></div>
+    <div class="overrides-note">Overrides &mdash; blank = auto from URL</div>
     <div class="ed-row">
       <label>Name</label>
       <div class="override-wrap">
@@ -707,6 +819,16 @@ function renderEarnReasons() {
     const div = document.createElement('div');
     div.className = 'item-row' + (i === earnReasonIdx ? ' selected' : '');
     div.onclick = () => selectEarnReason(i);
+    div.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      selectEarnReason(i);
+      showCtxMenu(event.clientX, event.clientY, [
+        { label: '↑ Move Up',   action: () => moveEarnReason(-1) },
+        { label: '↓ Move Down', action: () => moveEarnReason(1) },
+        'sep',
+        { label: 'Delete',      action: () => delEarnReason(), danger: true },
+      ]);
+    });
     wireDragRow(div, 'earn-reasons', i, (from, to) => {
       const page = currentPage();
       if (!moveInArray(page && page.reasons, from, to)) return;
@@ -821,6 +943,13 @@ function renderEarnNotes() {
     const div = document.createElement('div');
     div.className = 'item-row' + (i === earnNoteIdx ? ' selected' : '');
     div.onclick = () => selectEarnNote(i);
+    div.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      selectEarnNote(i);
+      showCtxMenu(event.clientX, event.clientY, [
+        { label: 'Delete', action: () => delEarnNote(), danger: true },
+      ]);
+    });
     wireDragRow(div, 'earn-notes', i, (from, to) => {
       const page = currentPage();
       if (!moveInArray(page && page.notes, from, to)) return;
@@ -1208,13 +1337,19 @@ function deleteTag() {
 // Save / Preview
 // ──────────────────────────────────────────────────────────────────
 async function saveConfig() {
+  clearTimeout(_saveTimer);
+  clearTimeout(_settingsTimer);
+  _saveTimer = null;
+  _settingsTimer = null;
   collectSettings();
   const validationErrors = validateSmilemakersUrls();
   if (validationErrors.length) {
-    setStatus(validationErrors[0], 'err');
+    focusValidationError(validationErrors[0]);
+    setStatus(validationErrors[0].message, 'err');
     return;
   }
   setStatus('Saving\u2026', 'warn');
+  saveInFlight = true;
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -1223,14 +1358,18 @@ async function saveConfig() {
     });
     const d = await r.json();
     if (d.ok) {
+      hasUnsavedChanges = false;
       setStatus('Saved ✓', 'ok');
       setTimeout(() => setStatus('Ready'), 2500);
       reloadPreview();
     } else {
-      setStatus('Save failed: ' + (d.error || '?'), 'err');
+      handleBackendValidationError(d.error || '?');
     }
   } catch(e) {
     setStatus('Network error', 'err');
+  } finally {
+    saveInFlight = false;
+    markCleanIfIdle();
   }
 }
 
@@ -1243,29 +1382,29 @@ function validateSmilemakersUrls() {
       const label = `Page ${pidx + 1}, item ${iidx + 1}`;
       const urls = item.urls || [];
       if (!urls.length) {
-        errors.push(`${label}: add at least one SmileMakers URL`);
+        errors.push({ message: `${label}: add at least one SmileMakers URL`, pageIdx: pidx, itemIdx: iidx, fieldId: 'url-entry' });
         return;
       }
       urls.forEach((raw, uidx) => {
         const url = String(raw || '').trim();
         if (!url) {
-          errors.push(`${label}: URL ${uidx + 1} is empty`);
+          errors.push({ message: `${label}: URL ${uidx + 1} is empty`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
           return;
         }
         let parsed;
         try {
           parsed = new URL(url);
         } catch(e) {
-          errors.push(`${label}: URL ${uidx + 1} is not a valid URL`);
+          errors.push({ message: `${label}: URL ${uidx + 1} is not a valid URL`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
           return;
         }
         if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes('smilemakersonline.com')) {
-          errors.push(`${label}: URL ${uidx + 1} must be a SmileMakers URL`);
+          errors.push({ message: `${label}: URL ${uidx + 1} must be a SmileMakers URL`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
           return;
         }
         const key = parsed.href.replace(/\/$/, '').toLowerCase();
         if (seen.has(key)) {
-          errors.push(`${label}: duplicate URL also used at ${seen.get(key)}`);
+          errors.push({ message: `${label}: duplicate URL also used at ${seen.get(key)}`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
         } else {
           seen.set(key, label);
         }
@@ -1275,10 +1414,57 @@ function validateSmilemakersUrls() {
   return errors;
 }
 
+function focusValidationError(error) {
+  if (!error || error.pageIdx == null) return;
+  setPageIdx(error.pageIdx);
+  if (error.itemIdx != null) {
+    itemIdx = error.itemIdx;
+    renderItems();
+    buildItemEditor();
+    openMobileEdit();
+  }
+  setTimeout(() => {
+    if (error.urlIdx != null) {
+      const sel = document.getElementById('url-select');
+      const entry = document.getElementById('url-entry');
+      if (sel && sel.options[error.urlIdx]) {
+        sel.selectedIndex = error.urlIdx;
+        if (entry) entry.value = sel.options[error.urlIdx].value;
+      }
+    }
+    const field = document.getElementById(error.fieldId || '');
+    if (field) {
+      field.focus();
+      if (typeof field.select === 'function') field.select();
+    }
+  }, 0);
+}
+
+function handleBackendValidationError(message) {
+  const text = String(message || '?');
+  setStatus('Save failed: ' + text, 'err');
+  const match = text.match(/pages\[(\d+)\]\.items\[(\d+)\](?:\.urls\[(\d+)\])?/);
+  if (match) {
+    focusValidationError({
+      message: text,
+      pageIdx: parseInt(match[1], 10),
+      itemIdx: parseInt(match[2], 10),
+      urlIdx: match[3] == null ? null : parseInt(match[3], 10),
+      fieldId: match[3] == null ? 'ed-name' : 'url-entry',
+    });
+    return;
+  }
+  const pageMatch = text.match(/pages\[(\d+)\]/);
+  if (pageMatch) {
+    setPageIdx(parseInt(pageMatch[1], 10));
+  }
+}
+
 // Auto-save: debounce 700ms after any change, then save + refresh preview.
 let _saveTimer = null;
 function scheduleSave() {
   clearTimeout(_saveTimer);
+  markDirty();
   setStatus('Unsaved changes\u2026', 'warn');
   _saveTimer = setTimeout(() => saveConfig(), 700);
 }
@@ -1288,10 +1474,13 @@ let _settingsTimer = null;
 async function scheduleSettingsSave() {
   collectSettings();   // update cfg in memory RIGHT NOW so switching items never loses data
   clearTimeout(_settingsTimer);
+  markDirty();
   setStatus('Unsaved changes\u2026', 'warn');
   _settingsTimer = setTimeout(async () => {
+    _settingsTimer = null;
     collectSettings(); // re-collect at write time in case of rapid changes
     setStatus('Saving\u2026', 'warn');
+    saveInFlight = true;
     try {
       const r = await fetch('/api/config', {
         method: 'POST',
@@ -1300,13 +1489,17 @@ async function scheduleSettingsSave() {
       });
       const d = await r.json();
       if (d.ok) {
+        hasUnsavedChanges = false;
         setStatus('Saved ✓', 'ok');
         setTimeout(() => setStatus('Ready'), 2500);
       } else {
-        setStatus('Save failed: ' + (d.error || '?'), 'err');
+        handleBackendValidationError(d.error || '?');
       }
     } catch(e) {
       setStatus('Network error', 'err');
+    } finally {
+      saveInFlight = false;
+      markCleanIfIdle();
     }
   }, 900);
 }
@@ -1373,11 +1566,13 @@ function restorePreviewScroll(frame, pos) {
   const prev   = document.getElementById('preview-panel');
   if (!handle) return;
   let startX, startRW, startPW;
+  const frame = document.getElementById('preview-frame');
   handle.addEventListener('mousedown', e => {
     startX  = e.clientX;
     startRW = right.offsetWidth;
     startPW = prev.offsetWidth;
     handle.classList.add('dragging');
+    if (frame) frame.style.pointerEvents = 'none';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onUp);
     e.preventDefault();
@@ -1393,6 +1588,7 @@ function restorePreviewScroll(frame, pos) {
   }
   function onUp() {
     handle.classList.remove('dragging');
+    if (frame) frame.style.pointerEvents = '';
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup',   onUp);
   }
@@ -1470,4 +1666,5 @@ function initMobile() {
 window.addEventListener('resize', initMobile);
 
 // Boot
+wireUnsavedNavigationGuard();
 boot().then(() => initMobile());

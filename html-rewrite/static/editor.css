@@ -22,7 +22,7 @@ body.dark-mode {
   color: #ECE7DD;
 }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-       font-size: 13px; background: var(--bg); color: #222;
+       font-size: 14px; background: var(--bg); color: #222;
        display: flex; flex-direction: column;
        height: 100vh; height: 100dvh; /* dvh accounts for Safari's dynamic toolbar */
        overflow: hidden; }
@@ -89,8 +89,8 @@ body.dark-mode .clr-btn {
 #topbar .spacer { flex: 1; }
 #topbar button { padding: 5px 14px; border-radius: 4px; border: none; cursor: pointer;
                  font-size: 12px; font-weight: 600; }
-#btn-save   { background: var(--pickle); color: #fff; }
-#btn-preview{ background: var(--yellow); color: var(--dark); }
+#btn-save { background: var(--pickle); color: #fff; }
+body.dark-mode #btn-save { color: #000; }
 #status { font-size: 11px; color: #aaa; min-width: 120px; text-align: right; transition: color 0.15s; }
 #undo-toast-wrap {
   position: fixed;
@@ -195,17 +195,49 @@ body.dark-mode .clr-btn {
   background: #EEF7E6;
 }
 .btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
-.btn-row button { flex: 1; padding: 4px 2px; font-size: 11px; border: 1px solid var(--border);
-                  border-radius: 3px; background: #fff; cursor: pointer; }
+.btn-row button { flex: 1; padding: 6px 4px; font-size: 11px; border: 1px solid var(--border);
+                  border-radius: 4px; background: #fff; cursor: pointer; }
 .btn-row button:hover { background: var(--border); }
+.touch-actions {
+  display: none;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.touch-actions button {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--dark);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.touch-actions button.danger { color: var(--red); }
+body.dark-mode .touch-actions button {
+  background: #24211E;
+  color: #ECE7DD;
+  border-color: var(--border);
+}
+body.dark-mode .touch-actions button.danger { color: #FFB8B2; }
 
 /* Settings tab */
-.setting-group { margin-bottom: 12px; }
+.setting-group { margin-bottom: 14px; }
 .setting-group label { display: block; font-size: 11px; font-weight: 600;
-                       color: var(--muted); margin-bottom: 3px; }
+                       color: var(--muted); margin-bottom: 4px; }
 .setting-group input, .setting-group select {
-  width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 3px;
-  font-size: 12px; background: #fff; }
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 13px; background: #fff; }
+.advanced-toggle { margin-top: 6px; }
+.advanced-toggle summary {
+  font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer;
+  padding: 4px 0; list-style: none; display: flex; align-items: center; gap: 4px;
+}
+.advanced-toggle summary::before { content: "›"; font-size: 14px; transition: transform .15s; }
+.advanced-toggle[open] summary::before { transform: rotate(90deg); }
+.advanced-toggle .setting-group { margin-top: 10px; }
 .check-setting {
   display: flex !important;
   align-items: center;
@@ -223,27 +255,29 @@ body.dark-mode .clr-btn {
   display: flex; flex-direction: column; overflow: hidden;
 }
 .section-header {
-  padding: 8px 12px; background: var(--ltgray); border-bottom: 1px solid var(--border);
+  padding: 9px 12px; background: var(--ltgray); border-bottom: 1px solid var(--border);
   font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
   letter-spacing: .5px;
 }
 .page-settings-form { padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .form-row { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
-.form-row label { width: 68px; flex-shrink: 0; font-size: 11px; font-weight: 600;
+.form-row label { width: 76px; flex-shrink: 0; font-size: 11px; font-weight: 600;
                   color: var(--muted); text-align: right; }
 .form-row input[type=text], .form-row input[type=number], .form-row select {
   flex: 1; padding: 4px 6px; border: 1px solid var(--border); border-radius: 3px;
   font-size: 12px; }
+.form-row .compact-num { flex: 0 0 64px; max-width: 64px; }
 .form-row input[type=color] { width: 30px; height: 26px; padding: 1px; border-radius: 3px;
                                border: 1px solid var(--border); cursor: pointer; }
 .accent-row { display: flex; gap: 4px; align-items: center; }
 .accent-row input[type=text] { flex: 1; font-family: monospace; font-size: 11px; }
-.apply-btn { display: block; margin-left: auto; padding: 4px 14px;
+.apply-btn { display: block; margin-left: auto; padding: 6px 16px;
              background: var(--pickle); color: #fff; border: none;
-             border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: 600; }
+             border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
 
 #items-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 8px; }
 #items-area .section-header { margin: 0 -8px 6px; padding: 6px 12px; }
+.section-header.compact-gap { margin-top: 6px; }
 .list-filter {
   width: 100%;
   padding: 6px 8px;
@@ -394,6 +428,26 @@ body.dark-mode .clr-btn {
 .modal-footer button { padding: 6px 18px; background: var(--pickle); color: #fff;
                        border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
 
+/* ── Context menu ─────────────────────────────────────────────── */
+#ctx-menu {
+  position: fixed; z-index: 2000; display: none;
+  background: #fff; border: 1px solid var(--border); border-radius: 7px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.16); padding: 4px 0; min-width: 170px;
+}
+.ctx-item {
+  display: block; width: 100%; text-align: left;
+  padding: 8px 16px; border: none; background: none;
+  cursor: pointer; font-size: 12px; color: #222; font-family: inherit;
+}
+.ctx-item:hover { background: var(--ltgray); }
+.ctx-item.ctx-danger { color: var(--red); }
+.ctx-item.ctx-danger:hover { background: #fff0f0; }
+.ctx-sep { border: none; border-top: 1px solid var(--border); margin: 3px 0; }
+body.dark-mode #ctx-menu { background: #24211E; border-color: var(--border); }
+body.dark-mode .ctx-item { color: #ECE7DD; }
+body.dark-mode .ctx-item:hover { background: #2e2a26; }
+.ctx-hint { font-size: 10px; color: var(--muted); text-align: center; padding: 4px 0 2px; opacity: 0.7; }
+
 /* ── Preview panel ────────────────────────────────────────────── */
 #drag-handle {
   width: 5px; flex-shrink: 0; background: var(--border); cursor: col-resize;
@@ -507,10 +561,13 @@ body.dark-mode .clr-btn {
   /* Larger touch targets */
   .page-item { padding: 11px 12px; font-size: 13px; }
   .item-row { padding: 9px 12px; }
+  .touch-actions { display: flex; }
+  .ctx-hint { display: none; }
   .btn-row button { padding: 8px 2px; font-size: 12px; min-height: 34px; }
   .tab-btn { padding: 10px 4px; font-size: 12px; }
   .apply-btn { padding: 7px 18px; }
   .form-row input[type=text], .form-row input[type=number], .form-row select { min-height: 30px; }
+  .form-row .compact-num { flex: 1; max-width: none; }
   .setting-group input, .setting-group select { min-height: 30px; font-size: 13px; }
   .ed-row input[type=text], .ed-row input[type=number], .ed-row select { min-height: 30px; }
 }

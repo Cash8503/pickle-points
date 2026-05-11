@@ -1,106 +1,305 @@
 """
 Smoke tests for the Pickle Points Flask app.
 
-Run while the server is NOT running — this script starts it internally.
-Usage:
+Run from html-rewrite while the server may be running or stopped:
     python smoke_test.py
 """
 
+from contextlib import contextmanager
 import sys
-import threading
-import time
 
-import requests
-
-BASE = "http://localhost:5001"
+import api
+from main import app
 
 
-def _start_server():
-    from main import app
-    app.run(host="127.0.0.1", port=5001, debug=False, use_reloader=False)
+TEST_CONFIG = {
+    "output_path": "",
+    "pdf_title": "Smoke Test Chart",
+    "settings": {
+        "fetch_concurrency": 1,
+        "price_per_pickle": 0.5,
+        "pickle_chip_value": 1,
+    },
+    "tag_colors": {},
+    "pages": [{
+        "title": "Always Available",
+        "subtitle": "Smoke test page",
+        "section_label": "Smoke",
+        "accent": "#DA291C",
+        "items": [{
+            "type": "manual",
+            "name": "Test Prize",
+            "desc": "A test reward.",
+            "pickles": 10,
+            "image": "",
+        }],
+        "layout": {"cols": 4},
+    }],
+}
 
 
-def _wait_for_server(timeout=10):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+@contextmanager
+def patched(**replacements):
+    originals = {}
+    for name, value in replacements.items():
+        originals[name] = getattr(api, name)
+        setattr(api, name, value)
+    try:
+        yield
+    finally:
+        for name, value in originals.items():
+            setattr(api, name, value)
+
+
+def set_session(client, **values):
+    with client.session_transaction() as session:
+        session.clear()
+        session.update(values)
+
+
+def seed_session(client, **values):
+    with client.session_transaction() as session:
+        session.clear()
+        session.update({
+            "csrf_token": "token",
+            "user_id": 1,
+            "username": "admin",
+            "real_name": "Admin User",
+            "is_admin": True,
+            "store": "1001",
+        })
+        session.update(values)
+
+
+class SmokeRunner:
+    def __init__(self):
+        self.passed = 0
+        self.failed = 0
+
+    def check(self, name, fn):
         try:
-            requests.get(BASE + "/login", timeout=1)
-            return True
-        except Exception:
-            time.sleep(0.2)
-    return False
+            fn()
+        except Exception as exc:
+            self.failed += 1
+            print(f"  FAIL  {name}: {exc}")
+        else:
+            self.passed += 1
+            print(f"  PASS  {name}")
+
+    def result(self):
+        print()
+        print(f"Results: {self.passed} passed, {self.failed} failed")
+        return self.failed == 0
+
+
+def test_login_loads(client):
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("Content-Type", "")
+    assert "charset=utf-8" in response.headers.get("Content-Type", "").lower()
+
+
+def test_unauthenticated_routes(client):
+    response = client.get("/api/config")
+    assert response.status_code == 401
+
+    response = client.get("/admin", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+
+
+def test_first_admin_setup(client):
+    created = {}
+    set_session(client, csrf_token="token")
+
+    def create_user(username, real_name, is_admin=False, store_nums=None):
+        created["username"] = username
+        created["real_name"] = real_name
+        created["is_admin"] = is_admin
+        return 1
+
+    def set_password(user_id, password):
+        created["password_user_id"] = user_id
+        created["password"] = password
+
+    with patched(
+        has_any_admin=lambda: False,
+        create_user=create_user,
+        set_password=set_password,
+        audit_log=lambda action, detail="": None,
+        get_user=lambda username=None, user_id=None: {
+            "id": 1,
+            "username": "admin",
+            "real_name": "Admin User",
+            "is_admin": 1,
+            "dark_mode": 0,
+            "password_hash": "set",
+        },
+        get_user_stores=lambda user_id: [],
+    ):
+        response = client.post("/login", data={
+            "csrf_token": "token",
+            "action": "setup_admin",
+            "username": "admin",
+            "real_name": "Admin User",
+            "password": "secret1",
+            "confirm": "secret1",
+        }, follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin")
+    assert created == {
+        "username": "admin",
+        "real_name": "Admin User",
+        "is_admin": True,
+        "password_user_id": 1,
+        "password": "secret1",
+    }
+
+
+def test_login_logout_and_password_creation(client):
+    set_session(client, csrf_token="token")
+    users = {
+        1: {
+            "id": 1,
+            "username": "crew",
+            "real_name": "Crew User",
+            "is_admin": 0,
+            "dark_mode": 0,
+            "password_hash": "set",
+        },
+        2: {
+            "id": 2,
+            "username": "newcrew",
+            "real_name": "New Crew",
+            "is_admin": 0,
+            "dark_mode": 0,
+            "password_hash": None,
+        },
+    }
+    password_sets = []
+
+    def get_user(username=None, user_id=None):
+        if user_id is not None:
+            return users.get(int(user_id))
+        return next((u for u in users.values() if u["username"] == username), None)
+
+    with patched(
+        has_any_admin=lambda: True,
+        get_user=get_user,
+        get_user_stores=lambda user_id: ["1001"],
+        check_password=lambda user_id, password: user_id == 1 and password == "secret1",
+        set_password=lambda user_id, password: password_sets.append((user_id, password)),
+        audit_log=lambda action, detail="": None,
+    ):
+        response = client.post("/login", data={
+            "csrf_token": "token",
+            "action": "check_username",
+            "username": "crew",
+        })
+        assert response.status_code == 200
+        assert b"Enter Password" in response.data
+
+        response = client.post("/login", data={
+            "csrf_token": "token",
+            "action": "login",
+            "user_id": "1",
+            "password": "secret1",
+        }, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/")
+
+        response = client.get("/logout", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/login")
+
+        set_session(client, csrf_token="token")
+        response = client.post("/login", data={
+            "csrf_token": "token",
+            "action": "set_password",
+            "user_id": "2",
+            "password": "secret2",
+            "confirm": "secret2",
+        }, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/")
+        assert password_sets == [(2, "secret2")]
+
+
+def test_config_api(client):
+    saved = []
+    seed_session(client)
+    with patched(
+        load_config=lambda store_num: TEST_CONFIG,
+        save_config=lambda cfg, store_num, editor=None: saved.append((store_num, cfg, editor)),
+        prefetch_new_urls=lambda cfg: None,
+    ):
+        response = client.get("/api/config")
+        assert response.status_code == 200
+        assert response.get_json()["pdf_title"] == "Smoke Test Chart"
+
+        response = client.post("/api/config", json=TEST_CONFIG)
+        assert response.status_code == 200
+        assert response.get_json() == {"ok": True}
+        assert saved and saved[0][0] == "1001"
+
+        bad_config = {**TEST_CONFIG, "pages": [{"items": [{"type": "smilemakers", "urls": [""]}]}]}
+        response = client.post("/api/config", json=bad_config)
+        assert response.status_code == 400
+        assert "pages[0].items[0].urls[0]" in response.get_json()["error"]
+
+
+def test_admin_only_routes_reject_normal_users(client):
+    seed_session(client, is_admin=False)
+    response = client.get("/admin", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+
+
+def test_editor_has_no_admin_cache_controls(client):
+    seed_session(client, is_admin=True)
+    with patched(
+        list_store_nums=lambda: ["1001"],
+        get_user=lambda user_id=None, username=None: {
+            "id": 1,
+            "username": "admin",
+            "real_name": "Admin User",
+            "is_admin": 1,
+            "dark_mode": 0,
+        },
+    ):
+        response = client.get("/")
+    assert response.status_code == 200
+    assert b"/admin/cache/" not in response.data
+    assert b"Warm All Stores" not in response.data
+    assert b"Clear All Cache" not in response.data
+
+
+def test_preview_frame_renders(client):
+    seed_session(client)
+    with patched(load_config=lambda store_num: TEST_CONFIG):
+        response = client.get("/preview-frame")
+    assert response.status_code == 200
+    assert b"<!doctype html>" in response.data
+    assert b"Test Prize" in response.data
 
 
 def run_tests():
-    passed = 0
-    failed = 0
+    app.config["TESTING"] = True
+    client = app.test_client()
+    runner = SmokeRunner()
 
-    def ok(name):
-        nonlocal passed
-        passed += 1
-        print(f"  PASS  {name}")
+    runner.check("/login loads with charset", lambda: test_login_loads(client))
+    runner.check("unauthenticated routes reject correctly", lambda: test_unauthenticated_routes(client))
+    runner.check("first-admin setup creates admin and password", lambda: test_first_admin_setup(client))
+    runner.check("login, logout, and first password creation", lambda: test_login_logout_and_password_creation(client))
+    runner.check("/api/config GET and POST with session", lambda: test_config_api(client))
+    runner.check("admin-only routes reject normal users", lambda: test_admin_only_routes_reject_normal_users(client))
+    runner.check("editor has no admin cache controls", lambda: test_editor_has_no_admin_cache_controls(client))
+    runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))
 
-    def fail(name, reason):
-        nonlocal failed
-        failed += 1
-        print(f"  FAIL  {name}: {reason}")
-
-    # /login loads (200 HTML)
-    r = requests.get(BASE + "/login", allow_redirects=True)
-    if r.status_code == 200 and "text/html" in r.headers.get("Content-Type", ""):
-        ok("/login loads with 200 HTML")
-    else:
-        fail("/login loads", f"status={r.status_code} ct={r.headers.get('Content-Type')}")
-
-    # /admin/login loads (200 HTML)
-    r = requests.get(BASE + "/admin/login", allow_redirects=True)
-    if r.status_code == 200 and "text/html" in r.headers.get("Content-Type", ""):
-        ok("/admin/login loads with 200 HTML")
-    else:
-        fail("/admin/login loads", f"status={r.status_code}")
-
-    # /api/config without session → 401
-    r = requests.get(BASE + "/api/config")
-    if r.status_code == 401:
-        ok("/api/config returns 401 when not logged in")
-    else:
-        fail("/api/config unauthenticated", f"expected 401, got {r.status_code}")
-
-    # /api/config with a fake session → 200 JSON
-    with requests.Session() as s:
-        # Obtain the Flask session cookie by posting a valid-looking login.
-        # We can't easily inject a signed session without the secret key, so
-        # we just verify the 401 path; the 200 path is tested manually.
-        r2 = s.get(BASE + "/api/config")
-        if r2.status_code == 401:
-            ok("/api/config with no session still 401 (session isolation confirmed)")
-        else:
-            fail("/api/config session isolation", f"expected 401 got {r2.status_code}")
-
-    # Charset present on HTML responses
-    r = requests.get(BASE + "/login")
-    ct = r.headers.get("Content-Type", "")
-    if "charset" in ct.lower():
-        ok("/login response includes charset in Content-Type")
-    else:
-        fail("/login charset", f"Content-Type: {ct}")
-
-    print()
-    print(f"Results: {passed} passed, {failed} failed")
-    return failed == 0
-
-
-def main():
-    print("Starting server…")
-    t = threading.Thread(target=_start_server, daemon=True)
-    t.start()
-    if not _wait_for_server():
-        print("ERROR: server did not start within 10 s")
-        sys.exit(1)
-    print("Server ready. Running smoke tests…\n")
-    success = run_tests()
-    sys.exit(0 if success else 1)
+    return runner.result()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(0 if run_tests() else 1)
