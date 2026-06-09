@@ -412,7 +412,15 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
 
             tag_html  = _tag_badge_html(tag, tag_colors)
             swatch_html = _variant_swatches_html(variants)
-            approved_html = _uniform_approved_marker_html(11, approved=approved)
+            approved_html = _uniform_approved_marker_html(10, approved=approved)
+            bottom_approved_html = '' if image else approved_html
+            image_approved_html = (
+                f'<span class="uniform-marker-overlay" style="position:absolute;right:1pt;bottom:1pt;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'filter:drop-shadow(0 0.8pt 1.2pt rgba(0,0,0,.24))">'
+                f'{approved_html}</span>'
+                if image else ''
+            )
             img_html = (
                 f'<img class="reward-image" src="{image}" alt="" '
                 f'style="width:48pt;height:48pt;object-fit:contain;'
@@ -421,38 +429,42 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             )
             floating_img_html = (
                 f'<span style="float:right;width:48pt;height:48pt;margin:0 0 4pt 7pt;'
-                f'display:flex;align-items:flex-start;justify-content:center">'
-                f'{img_html}</span>'
+                f'display:flex;align-items:flex-start;justify-content:center;position:relative">'
+                f'{img_html}{image_approved_html}</span>'
                 if image else ''
             )
 
-            no_bottom_row = not swatch_html and not tag_html and not approved_html
+            no_bottom_row = not swatch_html and not tag_html and not bottom_approved_html
             if no_bottom_row:
-                outer_style = ('position:absolute;bottom:0;left:0;right:0;height:44pt;'
-                               'display:flex;align-items:center;padding-left:8pt;gap:3pt')
+                outer_style = ('position:absolute;bottom:0;left:8pt;right:8pt;height:44pt;'
+                               'display:flex;flex-direction:column;align-items:flex-start;'
+                               'justify-content:center;gap:1pt')
             else:
-                outer_style = ('position:absolute;bottom:22pt;left:8pt;'
-                               'display:flex;align-items:baseline;gap:3pt')
+                outer_style = ('position:absolute;bottom:22pt;left:8pt;right:8pt;height:22pt;'
+                               'display:flex;flex-direction:column;align-items:flex-start;'
+                               'justify-content:flex-end;gap:1pt')
 
             if pickle_value != 1:
                 points = pickles * pickle_value
                 price_html = (
                     f'<div style="{outer_style}">'
-                    f'<span style="font-size:16pt;font-weight:700;color:{accent};line-height:1"'
+                    f'<div style="display:flex;align-items:baseline;gap:3pt;line-height:1">'
+                    f'<span style="font-size:19pt;font-weight:700;color:{accent};line-height:1"'
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
                     f'<span style="font-size:6.5pt;font-weight:700;color:#9A8A76">CHIPS</span>'
-                    f'<span style="font-size:8pt;font-weight:400;color:#C0B090;line-height:1;margin-left:2pt">=</span>'
-                    f'<span style="font-size:13pt;font-weight:700;color:#9A8A76;line-height:1"'
-                    f' contenteditable spellcheck="false">{points}</span>'
-                    f'<span style="font-size:6.5pt;font-weight:700;color:#9A8A76">PTS</span>'
+                    f'</div>'
+                    f'<div style="font-size:6.5pt;font-weight:700;color:#9A8A76;line-height:1.05"'
+                    f' contenteditable spellcheck="false">{points} PTS</div>'
                     f'</div>'
                 )
             else:
                 price_html = (
                     f'<div style="{outer_style}">'
+                    f'<div style="display:flex;align-items:baseline;gap:3pt;line-height:1">'
                     f'<span style="font-size:20pt;font-weight:700;color:{accent};line-height:1"'
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
-                    f'<span style="font-size:7pt;font-weight:700;color:#9A8A76">PICKLES</span>'
+                    f'<span style="font-size:7pt;font-weight:700;color:#9A8A76">CHIPS</span>'
+                    f'</div>'
                     f'</div>'
                 )
 
@@ -475,7 +487,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
               left:8pt;right:8pt;border-top:0.7pt dashed #E8DFC8"></div>
   {price_html}
   <div style="position:absolute;bottom:10pt;left:8pt;display:flex;align-items:center;gap:4pt;flex-wrap:wrap">
-    {approved_html}
+    {bottom_approved_html}
     {swatch_html}
     {tag_html}
   </div>

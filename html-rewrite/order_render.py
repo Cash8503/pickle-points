@@ -1,12 +1,10 @@
-import math
-
 from flask import render_template
 
 from services import SIZE_ORDER
 
 
-ROWS_PER_PAGE = 18
-EXTRA_BLANK_ROWS = 8
+ORDER_LINES_PER_ITEM = 3
+ITEMS_PER_PAGE = 10
 
 
 def _format_money(value, fallback=None):
@@ -56,13 +54,13 @@ def _owed_pickles(item, pickle_value):
         value = int(pickle_value or 1)
     except (TypeError, ValueError):
         value = 1
-    owed = chips * max(1, value)
-    chip_note = f"{chips} chips" if value != 1 and chips else ""
+    owed = chips
+    chip_note = f"{chips * max(1, value)} pts" if value != 1 and chips else ""
     return owed, chip_note
 
 
-def _item_rows(pages, per_pickle, pickle_value):
-    rows = []
+def _item_sheets(pages, per_pickle, pickle_value):
+    sheets = []
     for page in pages:
         if page.get("type") == "earn":
             continue
@@ -77,7 +75,7 @@ def _item_rows(pages, per_pickle, pickle_value):
                 cost = "est. " + _format_money(float(pickles) * float(per_pickle or 0))
             owed, chip_note = _owed_pickles(item, pickle_value)
             variants = item.get("variants") or []
-            rows.append({
+            sheets.append({
                 "section": section,
                 "item": item.get("name", ""),
                 "size_hint": _size_summary(variants),
@@ -85,12 +83,12 @@ def _item_rows(pages, per_pickle, pickle_value):
                 "cost": cost,
                 "owed": owed if owed else "",
                 "chip_note": chip_note,
-                "blank": False,
+                "line_count": ORDER_LINES_PER_ITEM,
             })
-    return rows
+    return sheets
 
 
-def _blank_row():
+def _blank_sheet():
     return {
         "section": "",
         "item": "",
@@ -99,27 +97,22 @@ def _blank_row():
         "cost": "",
         "owed": "",
         "chip_note": "",
-        "blank": True,
+        "line_count": ORDER_LINES_PER_ITEM,
     }
 
 
 def render_order_tracker_html(pages, per_pickle, pickle_value, store_num):
-    rows = _item_rows(pages, per_pickle, pickle_value)
-    if not rows:
-        rows = []
-    rows.extend(_blank_row() for _ in range(EXTRA_BLANK_ROWS))
-
-    total_pages = max(1, math.ceil(len(rows) / ROWS_PER_PAGE))
-    while len(rows) < total_pages * ROWS_PER_PAGE:
-        rows.append(_blank_row())
-
-    page_rows = [
-        rows[i * ROWS_PER_PAGE:(i + 1) * ROWS_PER_PAGE]
-        for i in range(total_pages)
+    item_sheets = _item_sheets(pages, per_pickle, pickle_value)
+    if not item_sheets:
+        item_sheets = [_blank_sheet()]
+    page_sheets = [
+        item_sheets[i:i + ITEMS_PER_PAGE]
+        for i in range(0, len(item_sheets), ITEMS_PER_PAGE)
     ]
     return render_template(
         "order_tracker.html",
-        page_rows=page_rows,
-        total=total_pages,
+        page_sheets=page_sheets,
+        line_numbers=list(range(1, ORDER_LINES_PER_ITEM + 1)),
+        total=len(page_sheets),
         store_num=store_num,
     )

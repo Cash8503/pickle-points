@@ -79,8 +79,8 @@
                 justify-content: space-between;
                 gap: 20pt;
                 border-bottom: 5pt solid #ffc72c;
-                padding-bottom: 12pt;
-                margin-bottom: 12pt;
+                padding-bottom: 9pt;
+                margin-bottom: 8pt;
             }
             .brand {
                 display: flex;
@@ -131,22 +131,22 @@
                 width: 100%;
                 border-collapse: collapse;
                 table-layout: fixed;
-                font-size: 7.5pt;
+                font-size: 7.2pt;
             }
             th {
                 background: #1a1a1a;
                 color: #fff;
-                font-size: 6.7pt;
+                font-size: 6.4pt;
                 line-height: 1.1;
                 text-transform: uppercase;
                 letter-spacing: 0;
-                padding: 5pt 3pt;
+                padding: 4pt 3pt;
                 border: 0.7pt solid #1a1a1a;
                 text-align: left;
             }
             td {
-                height: 29pt;
-                padding: 4pt 3pt;
+                height: 15.7pt;
+                padding: 2pt 3pt;
                 border: 0.7pt solid #cfc5b7;
                 vertical-align: top;
                 color: #1a1a1a;
@@ -155,18 +155,28 @@
             tr:nth-child(even) td {
                 background: #fbf8f1;
             }
-            .col-crew { width: 66pt; }
-            .col-item { width: 125pt; }
-            .col-size { width: 45pt; }
-            .col-color { width: 52pt; }
+            .col-item { width: 122pt; }
+            .col-crew { width: 92pt; }
+            .col-size { width: 42pt; }
+            .col-color { width: 58pt; }
             .col-qty { width: 28pt; }
-            .col-cost { width: 49pt; }
-            .col-owed { width: 54pt; }
-            .col-paid { width: 38pt; }
+            .col-cost { width: 45pt; }
+            .col-owed { width: 48pt; }
+            .col-paid { width: 31pt; }
+            .order-lines tbody tr.item-start td {
+                border-top: 1.6pt solid #7d6f60;
+            }
+            .order-lines tbody tr.item-line td {
+                height: 17.5pt;
+            }
+            .item-cell {
+                background: #fbf8f1;
+            }
             .item-name {
                 font-weight: 700;
                 line-height: 1.15;
                 word-break: break-word;
+                font-size: 7.8pt;
             }
             .item-hint {
                 margin-top: 2pt;
@@ -194,9 +204,24 @@
                 border: 0.5pt solid #8c8173;
                 display: inline-block;
             }
+            .order-color-swatches {
+                display: flex;
+                align-items: center;
+                gap: 2.2pt;
+                flex-wrap: wrap;
+                padding-top: 0.5pt;
+            }
+            .order-color-swatch {
+                width: 7.5pt;
+                height: 7.5pt;
+                border-radius: 50%;
+                border: 0.8pt solid #1a1a1a;
+                display: inline-block;
+                background-clip: padding-box;
+            }
             .number-cell {
                 font-weight: 800;
-                font-size: 9pt;
+                font-size: 8.5pt;
                 text-align: center;
             }
             .chip-note {
@@ -208,10 +233,10 @@
                 margin-top: 1pt;
             }
             .paid-box {
-                width: 13pt;
-                height: 13pt;
+                width: 10pt;
+                height: 10pt;
                 border: 1.1pt solid #1a1a1a;
-                margin: 2pt auto 0;
+                margin: 0 auto;
             }
             .footer {
                 position: absolute;
@@ -302,7 +327,7 @@
         <div id="printbar">
             <button onclick="printFromTop()">Print / Save PDF</button>
             <span class="note"
-                >Click cells to type before printing. Boxes are for paid orders.</span
+                >Each item has 3 blank crew order lines. Quantity is left blank.</span
             >
             <span style="flex: 1"></span>
             <span style="color: #aaa; font-size: 11px"
@@ -313,7 +338,7 @@
 
         <div id="scaler-wrap">
             <div id="page-scaler">
-                {% for rows in page_rows %}
+                {% for sheets in page_sheets %}
                 <div class="page">
                     <div class="sheet-header">
                         <div class="brand">
@@ -337,11 +362,11 @@
                         </div>
                     </div>
 
-                    <table>
+                    <table class="order-lines">
                         <thead>
                             <tr>
-                                <th class="col-crew">Crew</th>
                                 <th class="col-item">Item</th>
+                                <th class="col-crew">Crew</th>
                                 <th class="col-size">Size</th>
                                 <th class="col-color">Color</th>
                                 <th class="col-qty">Qty</th>
@@ -352,47 +377,68 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for row in rows %}
-                            <tr>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true">
-                                    {% if row.item %}
-                                    <div class="item-name">{{ row.item }}</div>
+                            {% for sheet in sheets %}
+                            {% for line in line_numbers %}
+                            <tr class="item-line {% if loop.first %}item-start{% endif %}">
+                                {% if loop.first %}
+                                <td
+                                    class="item-cell"
+                                    rowspan="{{ sheet.line_count }}"
+                                    contenteditable="true"
+                                >
+                                    {% if sheet.item %}
+                                    <div class="item-name">{{ sheet.item }}</div>
                                     <div class="item-hint">
-                                        {% if row.section %}
-                                        <span class="section-name">{{ row.section }}</span>
+                                        {% if sheet.section %}
+                                        <span class="section-name">{{ sheet.section }}</span>
                                         {% endif %}
-                                        {% if row.size_hint %}
-                                        <span>Sizes: {{ row.size_hint }}</span>
-                                        {% endif %}
-                                        {% if row.color_swatches %}
-                                        <span class="swatches">
-                                            {% for color in row.color_swatches %}
-                                            <span
-                                                class="swatch"
-                                                style="background: {{ color }}"
-                                            ></span>
-                                            {% endfor %}
-                                        </span>
+                                        {% if sheet.size_hint %}
+                                        <span>Sizes: {{ sheet.size_hint }}</span>
                                         {% endif %}
                                     </div>
+                                    {% else %}
+                                    <div class="item-name">Item</div>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                <td contenteditable="true"></td>
+                                <td contenteditable="true"></td>
+                                <td contenteditable="true">
+                                    {% if sheet.color_swatches %}
+                                    <span class="order-color-swatches">
+                                        {% for color in sheet.color_swatches %}
+                                        <span
+                                            class="order-color-swatch"
+                                            style="background: {{ color }}"
+                                        ></span>
+                                        {% endfor %}
+                                    </span>
                                     {% endif %}
                                 </td>
                                 <td contenteditable="true"></td>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true" class="number-cell">
-                                    {% if row.item %}1{% endif %}
+                                {% if loop.first %}
+                                <td
+                                    class="number-cell"
+                                    rowspan="{{ sheet.line_count }}"
+                                    contenteditable="true"
+                                >
+                                    {{ sheet.cost }}
                                 </td>
-                                <td contenteditable="true">{{ row.cost }}</td>
-                                <td contenteditable="true" class="number-cell">
-                                    {{ row.owed }}
-                                    {% if row.chip_note %}
-                                    <span class="chip-note">{{ row.chip_note }}</span>
+                                <td
+                                    class="number-cell"
+                                    rowspan="{{ sheet.line_count }}"
+                                    contenteditable="true"
+                                >
+                                    {{ sheet.owed }}
+                                    {% if sheet.chip_note %}
+                                    <span class="chip-note">{{ sheet.chip_note }}</span>
                                     {% endif %}
                                 </td>
+                                {% endif %}
                                 <td><div class="paid-box"></div></td>
                                 <td contenteditable="true"></td>
                             </tr>
+                            {% endfor %}
                             {% endfor %}
                         </tbody>
                     </table>

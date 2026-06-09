@@ -6,6 +6,7 @@ Run from html-rewrite while the server may be running or stopped:
 """
 
 from contextlib import contextmanager
+import re
 import sys
 
 import api
@@ -18,7 +19,7 @@ TEST_CONFIG = {
     "settings": {
         "fetch_concurrency": 1,
         "price_per_pickle": 0.5,
-        "pickle_chip_value": 1,
+        "pickle_chip_value": 5,
     },
     "tag_colors": {},
     "pages": [{
@@ -31,8 +32,12 @@ TEST_CONFIG = {
             "name": "Test Prize",
             "desc": "A test reward.",
             "pickles": 10,
-            "image": "",
+            "image": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect width='10' height='10' fill='red'/%3E%3C/svg%3E",
             "uniform_approved": True,
+            "variants": [
+                {"type": "color", "value": "#DA291C"},
+                {"type": "color", "value": "#4A6B1F"},
+            ],
         }],
         "layout": {"cols": 4},
     }],
@@ -286,6 +291,9 @@ def test_preview_frame_renders(client):
     assert b"UNIFORM APPROVED" in response.data
     assert b"NOT UNIFORM APPROVED" in response.data
     assert b"#C62828" in response.data
+    assert b"uniform-marker-overlay" in response.data
+    assert b"10</span><span style=\"font-size:6.5pt;font-weight:700;color:#9A8A76\">CHIPS" in response.data
+    assert b"50 PTS" in response.data
 
 
 def test_order_tracker_renders(client):
@@ -298,6 +306,12 @@ def test_order_tracker_renders(client):
     assert b"est. $5.00" in response.data
     assert b"Pickles Owed" in response.data
     assert b"paid-box" in response.data
+    assert b'rowspan="3"' in response.data
+    assert b"Each item has 3 blank crew order lines" in response.data
+    assert b"order-color-swatch" in response.data
+    assert b"50 pts" in response.data
+    assert re.search(rb'class="number-cell"[^>]*rowspan="3"[^>]*>\s*10\s*<span class="chip-note">50 pts</span>', response.data)
+    assert b'<td class="line-num">32</td>' not in response.data
 
 
 def run_tests():
