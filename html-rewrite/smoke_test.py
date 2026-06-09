@@ -32,6 +32,7 @@ TEST_CONFIG = {
             "desc": "A test reward.",
             "pickles": 10,
             "image": "",
+            "uniform_approved": True,
         }],
         "layout": {"cols": 4},
     }],
@@ -282,6 +283,21 @@ def test_preview_frame_renders(client):
     assert response.status_code == 200
     assert b"<!doctype html>" in response.data
     assert b"Test Prize" in response.data
+    assert b"UNIFORM APPROVED" in response.data
+    assert b"NOT UNIFORM APPROVED" in response.data
+    assert b"#C62828" in response.data
+
+
+def test_order_tracker_renders(client):
+    seed_session(client)
+    with patched(load_config=lambda store_num: TEST_CONFIG):
+        response = client.get("/order-tracker")
+    assert response.status_code == 200
+    assert b"Order Tracker" in response.data
+    assert b"Test Prize" in response.data
+    assert b"est. $5.00" in response.data
+    assert b"Pickles Owed" in response.data
+    assert b"paid-box" in response.data
 
 
 def run_tests():
@@ -297,6 +313,7 @@ def run_tests():
     runner.check("admin-only routes reject normal users", lambda: test_admin_only_routes_reject_normal_users(client))
     runner.check("editor has no admin cache controls", lambda: test_editor_has_no_admin_cache_controls(client))
     runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))
+    runner.check("order tracker renders printable order sheet", lambda: test_order_tracker_renders(client))
 
     return runner.result()
 

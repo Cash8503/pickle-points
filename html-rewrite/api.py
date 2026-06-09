@@ -20,6 +20,7 @@ from config import (audit_log, backup_config, delete_store_config,
                     sanitize_store_num, save_config, set_store_notes,
                     store_config_exists)
 from config_schema import validate_config
+from order_render import render_order_tracker_html
 from preview_render import render_preview_html
 from services import (cache_entries, cache_entries_for_urls, clear_cache,
                       fetch_smilemakers_product, get_cache_warm_status,
@@ -397,6 +398,28 @@ def register_routes(app):
         if page_idx is not None and 0 <= page_idx < len(pages):
             pages = [pages[page_idx]]
         return render_preview_html(pages, per_pickle, pickle_value, cfg.get("tag_colors", {}))
+
+    @app.route("/order-tracker")
+    @login_required
+    def order_tracker():
+        cfg = load_config(session["store"])
+        try:
+            pages, per_pickle, pickle_value = resolve_items_for_preview(cfg)
+        except Exception as exc:
+            logger.error("Order tracker render failed for store %s: %s", session.get("store"), exc)
+            return f"<pre>Error resolving items:\n{exc}</pre>", 500
+        return render_order_tracker_html(pages, per_pickle, pickle_value, session["store"])
+
+    @app.route("/order-tracker-frame")
+    @login_required
+    def order_tracker_frame():
+        cfg = load_config(session["store"])
+        try:
+            pages, per_pickle, pickle_value = resolve_items_for_preview(cfg)
+        except Exception as exc:
+            logger.error("Order tracker frame render failed for store %s: %s", session.get("store"), exc)
+            return f"<pre>Error: {exc}</pre>", 500
+        return render_order_tracker_html(pages, per_pickle, pickle_value, session["store"])
 
     # ── Admin dashboard ───────────────────────────────────────────
     @app.route("/admin")

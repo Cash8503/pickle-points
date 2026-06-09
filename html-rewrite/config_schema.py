@@ -115,3 +115,5 @@ def validate_config(cfg):
                     pickles = item["pickles"]
                     if not isinstance(pickles, int) or isinstance(pickles, bool) or pickles < 0:
                         _fail(f"{item_path}.pickles", "must be an integer of 0 or greater")
+            if "uniform_approved" in item and not isinstance(item["uniform_approved"], bool):
+                _fail(f"{item_path}.uniform_approved", "must be true or false")

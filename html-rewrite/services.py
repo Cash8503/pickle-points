@@ -569,6 +569,7 @@ def resolve_items_for_preview(cfg):
                     "image":    item.get("image", ""),
                     "variants": variants,
                     "price":    price,
+                    "uniform_approved": bool(item.get("uniform_approved")),
                 })
 
         if pending:
@@ -578,7 +579,8 @@ def resolve_items_for_preview(cfg):
                 if not urls:
                     return idx, {
                         "name":"","desc":"","pickles":0,
-                        "tag":item.get("tag"),"image":"","variants":[],"price":None
+                        "tag":item.get("tag"),"image":"","variants":[],"price":None,
+                        "uniform_approved": bool(item.get("uniform_approved")),
                     }
                 fn, fd, fi, fp, fetched_size_variants = fetch_smilemakers_product(urls[0])
                 variant_type = item.get("variant_type", "color")
@@ -626,6 +628,7 @@ def resolve_items_for_preview(cfg):
                     "image":    image_url,
                     "variants": variants,
                     "price":    page_price,
+                    "uniform_approved": bool(item.get("uniform_approved")),
                 }
 
             with ThreadPoolExecutor(max_workers=concurrency) as pool:

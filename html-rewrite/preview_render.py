@@ -103,6 +103,26 @@ def _tag_badge_html(tag, tag_colors):
             f'font-size:5.5pt;font-weight:700;padding:1pt 5pt;border-radius:4pt;'
             f'white-space:nowrap">{tag}</span>')
 
+def _uniform_approved_marker_html(size=12, label=False, approved=True):
+    bg = '#E2F0CE' if approved else '#F8D7DA'
+    border = '#6B7F2A' if approved else '#C62828'
+    color = '#3D6010' if approved else '#9F1D1D'
+    symbol = '&#10003;' if approved else '&#10005;'
+    label_text = 'UNIFORM APPROVED' if approved else 'NOT UNIFORM APPROVED'
+    text = (
+        f'<span style="font-size:6.2pt;font-weight:700;color:{color};white-space:nowrap">'
+        f'{label_text}</span>'
+        if label else ''
+    )
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:3pt;flex-shrink:0">'
+        f'<span style="width:{size}pt;height:{size}pt;border-radius:50%;'
+        f'background:{bg};border:1pt solid {border};color:{color};'
+        f'display:inline-flex;align-items:center;justify-content:center;'
+        f'font-size:{max(6, size - 4)}pt;font-weight:900;line-height:1">'
+        f'{symbol}</span>{text}</span>'
+    )
+
 def _chip_svg(size=14, fill1='#64a077', fill2='#99b179'):
     """Return a tiny inline SVG of the pickle chip."""
     return (f'<svg viewBox="0 0 126 126" width="{size}" height="{size}" '
@@ -328,7 +348,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
       </div>
       <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
@@ -386,19 +406,27 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             tag      = item.get('tag')
             image    = item.get('image', '')
             variants = item.get('variants', [])
+            approved = bool(item.get('uniform_approved'))
 
             pickles_str = str(pickles)
 
             tag_html  = _tag_badge_html(tag, tag_colors)
             swatch_html = _variant_swatches_html(variants)
+            approved_html = _uniform_approved_marker_html(11, approved=approved)
             img_html = (
-                f'<img src="{image}" alt="" '
-                f'style="max-width:48pt;max-height:48pt;object-fit:contain;'
-                f'border-radius:4pt;position:absolute;top:12pt;right:8pt">'
+                f'<img class="reward-image" src="{image}" alt="" '
+                f'style="width:48pt;height:48pt;object-fit:contain;'
+                f'border-radius:4pt;display:block">'
+                if image else ''
+            )
+            floating_img_html = (
+                f'<span style="float:right;width:48pt;height:48pt;margin:0 0 4pt 7pt;'
+                f'display:flex;align-items:flex-start;justify-content:center">'
+                f'{img_html}</span>'
                 if image else ''
             )
 
-            no_bottom_row = not swatch_html and not tag_html
+            no_bottom_row = not swatch_html and not tag_html and not approved_html
             if no_bottom_row:
                 outer_style = ('position:absolute;bottom:0;left:0;right:0;height:44pt;'
                                'display:flex;align-items:center;padding-left:8pt;gap:3pt')
@@ -434,21 +462,20 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
      height:{card_h}pt;overflow:hidden;break-inside:avoid;page-break-inside:avoid">
   <div style="position:absolute;top:0;left:0;right:0;height:8pt;
               background:{accent};border-radius:8pt 8pt 0 0"></div>
-  {img_html}
-  <div style="position:absolute;top:10pt;left:8pt;right:{56 if image else 8}pt;
-              font-size:9pt;font-weight:700;color:#1A1A1A;line-height:1.2;
-              word-break:break-word;overflow:hidden;
-              display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
-       contenteditable spellcheck="false">{name}</div>
-  <div style="position:absolute;top:32pt;left:8pt;right:{56 if image else 8}pt;
-              font-size:6.5pt;color:#9A8A76;line-height:1.3;
-              word-break:break-word;overflow:hidden;
-              display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical"
-       contenteditable spellcheck="false">{desc}</div>
-  <div style="position:absolute;bottom:{card_h - (card_h - 44)}pt;
+  <div class="reward-copy" style="position:absolute;top:11pt;left:8pt;right:8pt;bottom:48pt;
+              overflow:hidden;overflow-wrap:anywhere;word-break:break-word">
+    {floating_img_html}
+    <div class="reward-name" style="font-size:9pt;font-weight:700;color:#1A1A1A;line-height:1.16;
+                margin-bottom:2pt"
+         contenteditable spellcheck="false">{name}</div>
+    <div class="reward-desc" style="font-size:6.5pt;color:#9A8A76;line-height:1.25"
+         contenteditable spellcheck="false">{desc}</div>
+  </div>
+  <div class="reward-divider" style="position:absolute;bottom:{card_h - (card_h - 44)}pt;
               left:8pt;right:8pt;border-top:0.7pt dashed #E8DFC8"></div>
   {price_html}
   <div style="position:absolute;bottom:10pt;left:8pt;display:flex;align-items:center;gap:4pt;flex-wrap:wrap">
+    {approved_html}
     {swatch_html}
     {tag_html}
   </div>
@@ -544,7 +571,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
       </div>
       <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION

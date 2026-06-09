@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pickle Points - Order Tracker</title>
+        <style>
+            @page {
+                size: letter portrait;
+                margin: 0;
+            }
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Arial,
+                    sans-serif;
+                background: #888;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 20pt 0 40pt;
+                min-height: 100vh;
+                overflow-x: hidden;
+            }
+            #printbar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: #1a1a1a;
+                color: #fff;
+                padding: 8px 20px;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                z-index: 100;
+                font-size: 13px;
+            }
+            #printbar button {
+                padding: 6px 18px;
+                background: #ffc72c;
+                color: #1a1a1a;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: 700;
+                font-size: 13px;
+            }
+            #printbar .note {
+                font-size: 11px;
+                color: #aaa;
+            }
+            #scaler-wrap {
+                flex-shrink: 0;
+                overflow: hidden;
+                transform-style: flat;
+            }
+            .page {
+                position: relative;
+                width: 612pt;
+                height: 792pt;
+                background: #fff;
+                box-shadow: 0 4pt 20pt rgba(0, 0, 0, 0.4);
+                overflow: hidden;
+                flex-shrink: 0;
+                padding: 30pt 28pt 26pt;
+            }
+            .page-screen-gap {
+                height: 20pt;
+                flex: 0 0 auto;
+            }
+            .sheet-header {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 20pt;
+                border-bottom: 5pt solid #ffc72c;
+                padding-bottom: 12pt;
+                margin-bottom: 12pt;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 10pt;
+            }
+            .pickle-mark {
+                width: 40pt;
+                height: 40pt;
+                border-radius: 50%;
+                background: #64a077;
+                border: 5pt solid #99b179;
+                box-shadow: inset 5pt 0 0 rgba(255, 255, 255, 0.18);
+            }
+            h1 {
+                font-size: 25pt;
+                line-height: 1;
+                color: #1a1a1a;
+                font-weight: 800;
+                letter-spacing: 0;
+            }
+            .subtitle {
+                margin-top: 4pt;
+                font-size: 8pt;
+                color: #6f6254;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+            .meta {
+                min-width: 155pt;
+                font-size: 8pt;
+                color: #1a1a1a;
+                display: grid;
+                grid-template-columns: 42pt 1fr;
+                gap: 5pt 6pt;
+                align-items: end;
+            }
+            .meta-label {
+                color: #6f6254;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+            .write-line {
+                min-height: 12pt;
+                border-bottom: 0.8pt solid #b8ad9e;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+                font-size: 7.5pt;
+            }
+            th {
+                background: #1a1a1a;
+                color: #fff;
+                font-size: 6.7pt;
+                line-height: 1.1;
+                text-transform: uppercase;
+                letter-spacing: 0;
+                padding: 5pt 3pt;
+                border: 0.7pt solid #1a1a1a;
+                text-align: left;
+            }
+            td {
+                height: 29pt;
+                padding: 4pt 3pt;
+                border: 0.7pt solid #cfc5b7;
+                vertical-align: top;
+                color: #1a1a1a;
+                overflow: hidden;
+            }
+            tr:nth-child(even) td {
+                background: #fbf8f1;
+            }
+            .col-crew { width: 66pt; }
+            .col-item { width: 125pt; }
+            .col-size { width: 45pt; }
+            .col-color { width: 52pt; }
+            .col-qty { width: 28pt; }
+            .col-cost { width: 49pt; }
+            .col-owed { width: 54pt; }
+            .col-paid { width: 38pt; }
+            .item-name {
+                font-weight: 700;
+                line-height: 1.15;
+                word-break: break-word;
+            }
+            .item-hint {
+                margin-top: 2pt;
+                color: #7d6f60;
+                font-size: 6.3pt;
+                line-height: 1.15;
+                display: flex;
+                align-items: center;
+                gap: 4pt;
+                flex-wrap: wrap;
+            }
+            .section-name {
+                color: #9a8a76;
+                font-weight: 700;
+            }
+            .swatches {
+                display: inline-flex;
+                gap: 2pt;
+                align-items: center;
+            }
+            .swatch {
+                width: 6pt;
+                height: 6pt;
+                border-radius: 50%;
+                border: 0.5pt solid #8c8173;
+                display: inline-block;
+            }
+            .number-cell {
+                font-weight: 800;
+                font-size: 9pt;
+                text-align: center;
+            }
+            .chip-note {
+                display: block;
+                color: #7d6f60;
+                font-size: 5.8pt;
+                font-weight: 600;
+                text-align: center;
+                margin-top: 1pt;
+            }
+            .paid-box {
+                width: 13pt;
+                height: 13pt;
+                border: 1.1pt solid #1a1a1a;
+                margin: 2pt auto 0;
+            }
+            .footer {
+                position: absolute;
+                left: 28pt;
+                right: 28pt;
+                bottom: 14pt;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 7pt;
+                color: #7d6f60;
+                font-weight: 700;
+                border-top: 0.7pt solid #e8dfc8;
+                padding-top: 6pt;
+            }
+            [contenteditable]:hover {
+                outline: 1px dashed rgba(0, 120, 255, 0.4);
+                cursor: text;
+            }
+            [contenteditable]:focus {
+                outline: 2px solid rgba(0, 120, 255, 0.6);
+                background: rgba(0, 120, 255, 0.04);
+            }
+            @media print {
+                :root {
+                    --print-safe-offset: 18pt;
+                    --print-safe-scale: 0.93;
+                }
+                #printbar,
+                #printbar-spacer,
+                .page-screen-gap {
+                    display: none !important;
+                }
+                #scaler-wrap {
+                    width: auto !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                }
+                #page-scaler {
+                    transform: none !important;
+                }
+                html,
+                body {
+                    background: white !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    display: block !important;
+                }
+                .page {
+                    box-shadow: none !important;
+                    page-break-after: always;
+                    break-after: page;
+                    margin: 0 !important;
+                    transform: translate(
+                            var(--print-safe-offset),
+                            var(--print-safe-offset)
+                        )
+                        scale(var(--print-safe-scale));
+                    transform-origin: top left;
+                }
+                .page:last-child {
+                    page-break-after: avoid;
+                    break-after: avoid;
+                }
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                }
+            }
+            @media (max-width: 500px) {
+                #printbar {
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    padding: 8px 12px;
+                }
+                #printbar .note {
+                    display: none;
+                }
+                #printbar button {
+                    padding: 8px 14px;
+                    font-size: 12px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="printbar">
+            <button onclick="printFromTop()">Print / Save PDF</button>
+            <span class="note"
+                >Click cells to type before printing. Boxes are for paid orders.</span
+            >
+            <span style="flex: 1"></span>
+            <span style="color: #aaa; font-size: 11px"
+                >{{ total }} page{% if total != 1 %}s{% endif %}</span
+            >
+        </div>
+        <div id="printbar-spacer" style="height: 44pt"></div>
+
+        <div id="scaler-wrap">
+            <div id="page-scaler">
+                {% for rows in page_rows %}
+                <div class="page">
+                    <div class="sheet-header">
+                        <div class="brand">
+                            <div class="pickle-mark"></div>
+                            <div>
+                                <h1>Order Tracker</h1>
+                                <div class="subtitle">
+                                    Pickle Points merch orders
+                                </div>
+                            </div>
+                        </div>
+                        <div class="meta">
+                            <div class="meta-label">Store</div>
+                            <div class="write-line" contenteditable="true">
+                                {{ store_num }}
+                            </div>
+                            <div class="meta-label">Order</div>
+                            <div class="write-line" contenteditable="true"></div>
+                            <div class="meta-label">Date</div>
+                            <div class="write-line" contenteditable="true"></div>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-crew">Crew</th>
+                                <th class="col-item">Item</th>
+                                <th class="col-size">Size</th>
+                                <th class="col-color">Color</th>
+                                <th class="col-qty">Qty</th>
+                                <th class="col-cost">Cost Each</th>
+                                <th class="col-owed">Pickles Owed</th>
+                                <th class="col-paid">Paid</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td contenteditable="true"></td>
+                                <td contenteditable="true">
+                                    {% if row.item %}
+                                    <div class="item-name">{{ row.item }}</div>
+                                    <div class="item-hint">
+                                        {% if row.section %}
+                                        <span class="section-name">{{ row.section }}</span>
+                                        {% endif %}
+                                        {% if row.size_hint %}
+                                        <span>Sizes: {{ row.size_hint }}</span>
+                                        {% endif %}
+                                        {% if row.color_swatches %}
+                                        <span class="swatches">
+                                            {% for color in row.color_swatches %}
+                                            <span
+                                                class="swatch"
+                                                style="background: {{ color }}"
+                                            ></span>
+                                            {% endfor %}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td contenteditable="true"></td>
+                                <td contenteditable="true"></td>
+                                <td contenteditable="true" class="number-cell">
+                                    {% if row.item %}1{% endif %}
+                                </td>
+                                <td contenteditable="true">{{ row.cost }}</td>
+                                <td contenteditable="true" class="number-cell">
+                                    {{ row.owed }}
+                                    {% if row.chip_note %}
+                                    <span class="chip-note">{{ row.chip_note }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><div class="paid-box"></div></td>
+                                <td contenteditable="true"></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <div class="footer">
+                        <span>Orders submitted on the last day of each month</span>
+                        <span>Page {{ loop.index }} of {{ total }}</span>
+                    </div>
+                </div>
+                {% if not loop.last %}
+                <div class="page-screen-gap"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                var PAGE_W = 816;
+                var scaler = document.getElementById("page-scaler");
+                var wrap = document.getElementById("scaler-wrap");
+
+                function applyScale() {
+                    if (!scaler || !wrap) return;
+                    var avail = window.innerWidth;
+                    var scale = Math.min(1, avail / PAGE_W);
+
+                    if (scale < 1) {
+                        scaler.style.transformOrigin = "0 0";
+                        scaler.style.transform = "scale(" + scale + ")";
+                        wrap.style.width = Math.ceil(PAGE_W * scale) + "px";
+                        wrap.style.height =
+                            Math.ceil(scaler.scrollHeight * scale) + "px";
+                    } else {
+                        scaler.style.transform = "";
+                        wrap.style.width = "";
+                        wrap.style.height = "";
+                    }
+                }
+
+                window.addEventListener("resize", applyScale);
+                applyScale();
+
+                window._scaleApply = applyScale;
+                window._scaleReset = function () {
+                    if (scaler) scaler.style.transform = "";
+                    if (wrap) {
+                        wrap.style.width = "";
+                        wrap.style.height = "";
+                    }
+                };
+            })();
+
+            let printScroll = null;
+
+            function preparePrintScroll() {
+                if (!printScroll) {
+                    printScroll = {
+                        x: window.scrollX || 0,
+                        y: window.scrollY || 0,
+                    };
+                }
+                window._scaleReset && window._scaleReset();
+                window.scrollTo(0, 0);
+            }
+
+            function restorePrintScroll() {
+                if (!printScroll) return;
+                window.scrollTo(printScroll.x, printScroll.y);
+                printScroll = null;
+                window._scaleApply && window._scaleApply();
+            }
+
+            function printFromTop() {
+                preparePrintScroll();
+                requestAnimationFrame(function () {
+                    window.print();
+                });
+            }
+
+            window.addEventListener("beforeprint", preparePrintScroll);
+            window.addEventListener("afterprint", restorePrintScroll);
+        </script>
+    </body>
+</html>

@@ -578,7 +578,7 @@ function copyPreviousItemFields() {
   const item = items[itemIdx];
   if (!prev || !item) return;
 
-  ['tag', 'variant_type', 'pickles', 'points', 'price'].forEach(key => {
+  ['tag', 'variant_type', 'pickles', 'points', 'price', 'uniform_approved'].forEach(key => {
     if (prev[key] === undefined || prev[key] === null || prev[key] === '') {
       delete item[key];
     } else {
@@ -660,6 +660,14 @@ function buildSmEditor(ed, item) {
       <select id="ed-tag" onchange="itemSet('tag', this.value || null)">
         ${tags.map(t => `<option value="${t}" ${item.tag===t?'selected':''}>${t||'(none)'}</option>`).join('')}
       </select>
+    </div>
+    <div class="ed-row">
+      <label>Uniform</label>
+      <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dark);padding-top:4px;text-align:left">
+        <input type="checkbox" ${item.uniform_approved ? 'checked' : ''}
+               onchange="itemSet('uniform_approved', this.checked)">
+        Approved
+      </label>
     </div>
     <div class="ed-row">
       <label>Variants</label>
@@ -756,6 +764,14 @@ function buildManualEditor(ed, item) {
       <select id="ed-tag" onchange="itemSet('tag', this.value||null)">
         ${tags.map(t => `<option value="${t}" ${item.tag===t?'selected':''}>${t||'(none)'}</option>`).join('')}
       </select>
+    </div>
+    <div class="ed-row">
+      <label>Uniform</label>
+      <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dark);padding-top:4px;text-align:left">
+        <input type="checkbox" ${item.uniform_approved ? 'checked' : ''}
+               onchange="itemSet('uniform_approved', this.checked)">
+        Approved
+      </label>
     </div>
     <div class="ed-row">
       <label>Image URL</label>
@@ -1518,6 +1534,10 @@ function reloadPreview() {
 
 function openPreview() {
   window.open(previewUrl('/preview'), '_blank');
+}
+
+function openOrderTracker() {
+  window.open(previewUrl('/order-tracker'), '_blank');
 }
 
 function previewUrl(base) {
