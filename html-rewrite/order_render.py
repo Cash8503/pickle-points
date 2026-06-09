@@ -3,8 +3,10 @@ from flask import render_template
 from services import SIZE_ORDER
 
 
+# Printed order sheet layout knobs.
 ORDER_LINES_PER_ITEM = 3
-ITEMS_PER_PAGE = 10
+ITEMS_PER_PAGE = 9
+EXTRA_ORDER_LINES = 6
 
 
 def _format_money(value, fallback=None):
@@ -113,6 +115,7 @@ def render_order_tracker_html(pages, per_pickle, pickle_value, store_num):
         "order_tracker.html",
         page_sheets=page_sheets,
         line_numbers=list(range(1, ORDER_LINES_PER_ITEM + 1)),
+        extra_order_lines=list(range(EXTRA_ORDER_LINES)),
         total=len(page_sheets),
         store_num=store_num,
     )

@@ -306,11 +306,18 @@ def test_order_tracker_renders(client):
     assert b"est. $5.00" in response.data
     assert b"Pickles Owed" in response.data
     assert b"paid-box" in response.data
+    assert b"Received" in response.data
+    assert b"received-box" in response.data
+    assert b"/static/pickle.svg" in response.data
     assert b'rowspan="3"' in response.data
     assert b"Each item has 3 blank crew order lines" in response.data
+    assert b"Extra Orders" in response.data
+    assert b"extra-orders" in response.data
     assert b"order-color-swatch" in response.data
     assert b"50 pts" in response.data
     assert re.search(rb'class="number-cell"[^>]*rowspan="3"[^>]*>\s*10\s*<span class="chip-note">50 pts</span>', response.data)
+    assert b">Qty<" not in response.data
+    assert b"col-qty" not in response.data
     assert b'<td class="line-num">32</td>' not in response.data
 
 

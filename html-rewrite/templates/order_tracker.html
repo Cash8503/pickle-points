@@ -90,10 +90,8 @@
             .pickle-mark {
                 width: 40pt;
                 height: 40pt;
-                border-radius: 50%;
-                background: #64a077;
-                border: 5pt solid #99b179;
-                box-shadow: inset 5pt 0 0 rgba(255, 255, 255, 0.18);
+                display: block;
+                object-fit: contain;
             }
             h1 {
                 font-size: 25pt;
@@ -155,18 +153,55 @@
             tr:nth-child(even) td {
                 background: #fbf8f1;
             }
-            .col-item { width: 122pt; }
-            .col-crew { width: 92pt; }
-            .col-size { width: 42pt; }
-            .col-color { width: 58pt; }
-            .col-qty { width: 28pt; }
-            .col-cost { width: 45pt; }
-            .col-owed { width: 48pt; }
-            .col-paid { width: 31pt; }
+            .col-item {
+                width: 118pt;
+            }
+            .col-crew {
+                width: 98pt;
+            }
+            .col-size {
+                width: 42pt;
+            }
+            .col-color {
+                width: 60pt;
+            }
+            .col-cost {
+                width: 45pt;
+            }
+            .col-owed {
+                width: 48pt;
+            }
+            .col-paid {
+                width: 31pt;
+            }
+            .col-received {
+                width: 42pt;
+            }
             .order-lines tbody tr.item-start td {
                 border-top: 1.6pt solid #7d6f60;
             }
             .order-lines tbody tr.item-line td {
+                height: 17.5pt;
+            }
+            .extra-section {
+                margin-top: 10pt;
+            }
+            .extra-title {
+                display: flex;
+                align-items: center;
+                gap: 8pt;
+                margin-bottom: 4pt;
+                color: #7d6f60;
+                font-size: 7pt;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+            .extra-title::after {
+                content: "";
+                flex: 1;
+                border-top: 0.7pt solid #e8dfc8;
+            }
+            .extra-orders td {
                 height: 17.5pt;
             }
             .item-cell {
@@ -232,7 +267,8 @@
                 text-align: center;
                 margin-top: 1pt;
             }
-            .paid-box {
+            .paid-box,
+            .received-box {
                 width: 10pt;
                 height: 10pt;
                 border: 1.1pt solid #1a1a1a;
@@ -327,7 +363,8 @@
         <div id="printbar">
             <button onclick="printFromTop()">Print / Save PDF</button>
             <span class="note"
-                >Each item has 3 blank crew order lines. Quantity is left blank.</span
+                >Each item has 3 blank crew order lines plus extra order
+                rows.</span
             >
             <span style="flex: 1"></span>
             <span style="color: #aaa; font-size: 11px"
@@ -342,7 +379,11 @@
                 <div class="page">
                     <div class="sheet-header">
                         <div class="brand">
-                            <div class="pickle-mark"></div>
+                            <img
+                                class="pickle-mark"
+                                src="{{ url_for('static', filename='pickle.svg') }}"
+                                alt=""
+                            />
                             <div>
                                 <h1>Order Tracker</h1>
                                 <div class="subtitle">
@@ -356,9 +397,15 @@
                                 {{ store_num }}
                             </div>
                             <div class="meta-label">Order</div>
-                            <div class="write-line" contenteditable="true"></div>
+                            <div
+                                class="write-line"
+                                contenteditable="true"
+                            ></div>
                             <div class="meta-label">Date</div>
-                            <div class="write-line" contenteditable="true"></div>
+                            <div
+                                class="write-line"
+                                contenteditable="true"
+                            ></div>
                         </div>
                     </div>
 
@@ -369,17 +416,19 @@
                                 <th class="col-crew">Crew</th>
                                 <th class="col-size">Size</th>
                                 <th class="col-color">Color</th>
-                                <th class="col-qty">Qty</th>
                                 <th class="col-cost">Cost Each</th>
                                 <th class="col-owed">Pickles Owed</th>
                                 <th class="col-paid">Paid</th>
+                                <th class="col-received">Received</th>
                                 <th>Notes</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for sheet in sheets %}
-                            {% for line in line_numbers %}
-                            <tr class="item-line {% if loop.first %}item-start{% endif %}">
+                            {% for sheet in sheets %} {% for line in
+                            line_numbers %}
+                            <tr
+                                class="item-line {% if loop.first %}item-start{% endif %}"
+                            >
                                 {% if loop.first %}
                                 <td
                                     class="item-cell"
@@ -387,13 +436,18 @@
                                     contenteditable="true"
                                 >
                                     {% if sheet.item %}
-                                    <div class="item-name">{{ sheet.item }}</div>
+                                    <div class="item-name">
+                                        {{ sheet.item }}
+                                    </div>
                                     <div class="item-hint">
                                         {% if sheet.section %}
-                                        <span class="section-name">{{ sheet.section }}</span>
-                                        {% endif %}
-                                        {% if sheet.size_hint %}
-                                        <span>Sizes: {{ sheet.size_hint }}</span>
+                                        <span class="section-name"
+                                            >{{ sheet.section }}</span
+                                        >
+                                        {% endif %} {% if sheet.size_hint %}
+                                        <span
+                                            >Sizes: {{ sheet.size_hint }}</span
+                                        >
                                         {% endif %}
                                     </div>
                                     {% else %}
@@ -415,7 +469,6 @@
                                     </span>
                                     {% endif %}
                                 </td>
-                                <td contenteditable="true"></td>
                                 {% if loop.first %}
                                 <td
                                     class="number-cell"
@@ -429,29 +482,68 @@
                                     rowspan="{{ sheet.line_count }}"
                                     contenteditable="true"
                                 >
-                                    {{ sheet.owed }}
-                                    {% if sheet.chip_note %}
-                                    <span class="chip-note">{{ sheet.chip_note }}</span>
+                                    {{ sheet.owed }} {% if sheet.chip_note %}
+                                    <span class="chip-note"
+                                        >{{ sheet.chip_note }}</span
+                                    >
                                     {% endif %}
                                 </td>
                                 {% endif %}
                                 <td><div class="paid-box"></div></td>
+                                <td><div class="received-box"></div></td>
                                 <td contenteditable="true"></td>
                             </tr>
-                            {% endfor %}
-                            {% endfor %}
+                            {% endfor %} {% endfor %}
                         </tbody>
                     </table>
 
+                    {% if loop.last %}
+                    <div class="extra-section">
+                        <div class="extra-title">Other Orders</div>
+                        <table class="extra-orders">
+                            <thead>
+                                <tr>
+                                    <th class="col-item">Item</th>
+                                    <th class="col-crew">Crew</th>
+                                    <th class="col-size">Size</th>
+                                    <th class="col-color">Color</th>
+                                    <th class="col-cost">Cost Each</th>
+                                    <th class="col-owed">Pickles Owed</th>
+                                    <th class="col-paid">Paid</th>
+                                    <th class="col-received">Received</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for _ in extra_order_lines %}
+                                <tr>
+                                    <td contenteditable="true"></td>
+                                    <td contenteditable="true"></td>
+                                    <td contenteditable="true"></td>
+                                    <td contenteditable="true"></td>
+                                    <td contenteditable="true"></td>
+                                    <td contenteditable="true"></td>
+                                    <td><div class="paid-box"></div></td>
+                                    <td><div class="received-box"></div></td>
+                                    <td contenteditable="true"></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
                     <div class="footer">
-                        <span>Orders submitted on the last day of each month</span>
+                        <span
+                            >Orders submitted on the last day of each
+                            month</span
+                        >
                         <span>Page {{ loop.index }} of {{ total }}</span>
                     </div>
                 </div>
                 {% if not loop.last %}
                 <div class="page-screen-gap"></div>
-                {% endif %}
-                {% endfor %}
+                {% endif %} {% endfor %}
             </div>
         </div>
 
