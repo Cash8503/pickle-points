@@ -663,11 +663,11 @@ function buildSmEditor(ed, item) {
     </div>
     <div class="ed-row">
       <label>Uniform</label>
-      <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dark);padding-top:4px;text-align:left">
-        <input type="checkbox" ${item.uniform_approved ? 'checked' : ''}
-               onchange="itemSet('uniform_approved', this.checked)">
-        Approved
-      </label>
+      <select onchange="itemSet('uniform_approved', this.value==='true'?true:this.value==='weekend'?'weekend':false)">
+        <option value="false" ${!item.uniform_approved?'selected':''}>Not Approved</option>
+        <option value="true" ${item.uniform_approved===true?'selected':''}>Approved</option>
+        <option value="weekend" ${item.uniform_approved==='weekend'?'selected':''}>Weekends Only</option>
+      </select>
     </div>
     <div class="ed-row">
       <label>Variants</label>
@@ -767,11 +767,11 @@ function buildManualEditor(ed, item) {
     </div>
     <div class="ed-row">
       <label>Uniform</label>
-      <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dark);padding-top:4px;text-align:left">
-        <input type="checkbox" ${item.uniform_approved ? 'checked' : ''}
-               onchange="itemSet('uniform_approved', this.checked)">
-        Approved
-      </label>
+      <select onchange="itemSet('uniform_approved', this.value==='true'?true:this.value==='weekend'?'weekend':false)">
+        <option value="false" ${!item.uniform_approved?'selected':''}>Not Approved</option>
+        <option value="true" ${item.uniform_approved===true?'selected':''}>Approved</option>
+        <option value="weekend" ${item.uniform_approved==='weekend'?'selected':''}>Weekends Only</option>
+      </select>
     </div>
     <div class="ed-row">
       <label>Image URL</label>

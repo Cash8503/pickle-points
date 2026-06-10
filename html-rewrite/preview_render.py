@@ -104,11 +104,15 @@ def _tag_badge_html(tag, tag_colors):
             f'white-space:nowrap">{tag}</span>')
 
 def _uniform_approved_marker_html(size=12, label=False, approved=True):
-    bg = '#E2F0CE' if approved else '#F8D7DA'
-    border = '#6B7F2A' if approved else '#C62828'
-    color = '#3D6010' if approved else '#9F1D1D'
-    symbol = '&#10003;' if approved else '&#10005;'
-    label_text = 'UNIFORM APPROVED' if approved else 'NOT UNIFORM APPROVED'
+    if approved == 'weekend':
+        bg, border, color, symbol = '#FFF9C4', '#C8A800', '#7D5A00', '~'
+        label_text = 'WEEKENDS ONLY'
+    elif approved:
+        bg, border, color, symbol = '#E2F0CE', '#6B7F2A', '#3D6010', '&#10003;'
+        label_text = 'UNIFORM APPROVED'
+    else:
+        bg, border, color, symbol = '#F8D7DA', '#C62828', '#9F1D1D', '&#10005;'
+        label_text = 'NOT UNIFORM APPROVED'
     text = (
         f'<span style="font-size:6.2pt;font-weight:700;color:{color};white-space:nowrap">'
         f'{label_text}</span>'
@@ -348,7 +352,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, 'weekend')} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
       </div>
       <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
@@ -583,7 +587,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
               background:#1A1A1A;display:flex;align-items:center;padding:0 28pt">
     <div style="flex:1">
       <div class="print-on-dark" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.45)">
-        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
+        EACH CHIP = {pickle_value} {footer_label} &nbsp;&bull;&nbsp; SEE CARMEN TO REDEEM &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, True)} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, 'weekend')} &nbsp;&bull;&nbsp; {_uniform_approved_marker_html(9, True, False)}
       </div>
       <div class="print-on-dark-secondary" style="font-size:7pt;font-weight:700;color:rgba(255,255,255,.35);margin-top:2pt">
         NOT EVERY ITEM IS DRESS CODE APPROVED &mdash; USE DISCRETION
