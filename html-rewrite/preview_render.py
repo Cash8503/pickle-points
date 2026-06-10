@@ -410,7 +410,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             tag      = item.get('tag')
             image    = item.get('image', '')
             variants = item.get('variants', [])
-            approved = bool(item.get('uniform_approved'))
+            approved = item.get('uniform_approved', False)
 
             pickles_str = str(pickles)
 
