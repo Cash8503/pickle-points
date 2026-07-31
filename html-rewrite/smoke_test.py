@@ -11,6 +11,7 @@ import sys
 
 import api
 import services
+from config import normalize_automatic_items
 from main import app
 from preview_render import render_preview_html
 
@@ -254,7 +255,7 @@ def test_config_api(client):
         automatic_config = {
             **TEST_CONFIG,
             "settings": {**TEST_CONFIG["settings"], "show_unavailable_cards": True},
-            "pages": [{"items": [{"type": "automatic", "urls": ["https://waytobe.com/product/example"]}]}],
+            "pages": [{"items": [{"type": "automatic", "urls": ["https://www.freshfashionsandmore.com/Big-Mac-McDonalds-T-Shirt"]}]}],
         }
         response = client.post("/api/config", json=automatic_config)
         assert response.status_code == 200
@@ -309,17 +310,45 @@ def test_editor_has_no_admin_cache_controls(client):
     assert b"+ SmileMakers" not in response.data
     assert b"+ WayToBe" not in response.data
     assert b"Show unavailable cards" in response.data
+    assert b"editor.js?v=" in response.data
+
+    script = client.get("/static/editor.js?v=test")
+    assert script.status_code == 200
+    assert b"function addAutomaticItem()" in script.data
+    assert b"Add a product URL to finish this item" in script.data
+    assert b"await saveConfig({ reloadPreview: false })" in script.data
+    assert b"await fetchAndApplyUrl(item, u, 'Checking product')" in script.data
+
+
+def test_legacy_item_migration():
+    cfg = {
+        "pages": [{"items": [
+            {"type": "smilemakers", "urls": ["https://smilemakersonline.com/item"]},
+            {"type": "waytobe", "urls": ["https://www.freshfashionsandmore.com/item"]},
+            {"type": "manual", "name": "Manual"},
+        ]}],
+    }
+    assert normalize_automatic_items(cfg) == 2
+    assert [item["type"] for item in cfg["pages"][0]["items"]] == [
+        "automatic", "automatic", "manual",
+    ]
+    assert cfg["pages"][0]["items"][1]["urls"] == [
+        "https://www.freshfashionsandmore.com/item",
+    ]
+    assert normalize_automatic_items(cfg) == 0
 
 
 def test_automatic_page_parsing():
     url = "https://shop.example.test/products/dynamic-item"
     html = """
     <html><head>
+      <meta property="og:description" content="DetailsDynamic Jacket" />
       <script type="application/ld+json">
         {"@context":"https://schema.org","@graph":[
           {"@type":"Product","name":"Dynamic Jacket",
            "description":"Sizes: S-XL. A lightweight jacket.",
-           "image":"/images/jacket.png","offers":{"lowPrice":"$12.50"}}
+           "image":"/images/jacket.png","offers":{"priceSpecification":
+             {"price":12.50,"minPrice":12.50,"maxPrice":18.50}}}
         ]}
       </script>
     </head><body></body></html>
@@ -374,6 +403,12 @@ def test_unavailable_automatic_cards():
 
         cfg["settings"]["show_unavailable_cards"] = True
         shown_pages, per_pickle, pickle_value = services.resolve_items_for_preview(cfg)
+
+        cfg["settings"]["show_unavailable_cards"] = False
+        services.fetch_vendor_product = lambda url: (
+            "Fresh Product", "Available now.", "https://shop.example.test/product.png", 6.99, [],
+        )
+        available_pages, _, _ = services.resolve_items_for_preview(cfg)
     finally:
         services.fetch_vendor_product = original_fetch
 
@@ -383,6 +418,9 @@ def test_unavailable_automatic_cards():
         rendered = render_preview_html(shown_pages, per_pickle, pickle_value, {})
     assert "Not currently available." in rendered
     assert "unavailable-card-label" in rendered
+    assert len(available_pages[0]["items"]) == 1
+    assert available_pages[0]["items"][0]["name"] == "Fresh Product"
+    assert available_pages[0]["items"][0]["_unavailable"] is False
 
 
 def test_preview_frame_renders(client):
@@ -396,6 +434,10 @@ def test_preview_frame_renders(client):
     assert b"NOT UNIFORM APPROVED" in response.data
     assert b"#C62828" in response.data
     assert b"uniform-marker-overlay" in response.data
+    assert b'class="reward-footer"' in response.data
+    assert b'class="reward-price"' in response.data
+    assert b'class="reward-meta"' in response.data
+    assert response.data.find(b'class="reward-price"') < response.data.find(b'class="reward-meta"')
     assert b"10</span><span style=\"font-size:6.5pt;font-weight:700;color:#9A8A76\">CHIPS" in response.data
     assert b"50 PTS" in response.data
 
@@ -441,6 +483,7 @@ def run_tests():
     runner.check("/api/config GET and POST with session", lambda: test_config_api(client))
     runner.check("admin-only routes reject normal users", lambda: test_admin_only_routes_reject_normal_users(client))
     runner.check("editor has no admin cache controls", lambda: test_editor_has_no_admin_cache_controls(client))
+    runner.check("legacy vendor items migrate to automatic", test_legacy_item_migration)
     runner.check("automatic item parses product JSON-LD", test_automatic_page_parsing)
     runner.check("unavailable automatic cards hide or show", test_unavailable_automatic_cards)
     runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))

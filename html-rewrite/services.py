@@ -394,6 +394,31 @@ def _first_sentence(text):
         return text[:m.start() + 1].strip()
     return text[:75] if len(text) > 75 else text
 
+
+def _price_from_offers(offers):
+    """Read regular, aggregate, and price-specification Schema.org offers."""
+    if isinstance(offers, list):
+        for offer in offers:
+            value = _price_from_offers(offer)
+            if value is not None:
+                return value
+        return None
+    if not isinstance(offers, dict):
+        return None
+    for key in ("price", "lowPrice", "minPrice"):
+        if offers.get(key) is not None:
+            return offers[key]
+    specifications = offers.get("priceSpecification")
+    if isinstance(specifications, dict):
+        specifications = [specifications]
+    for specification in specifications or []:
+        if not isinstance(specification, dict):
+            continue
+        for key in ("price", "lowPrice", "minPrice"):
+            if specification.get(key) is not None:
+                return specification[key]
+    return None
+
 def fetch_vendor_product(url):
     load_disk_cache()
     if url in _SMILEMAKERS_CACHE:
@@ -468,19 +493,19 @@ def fetch_vendor_product(url):
                         is_product = product_type == "Product"
                     if not is_product:
                         continue
-                    name = name or str(product.get("name") or "").strip()
-                    desc = desc or str(product.get("description") or "").strip()
+                    structured_name = str(product.get("name") or "").strip()
+                    structured_desc = str(product.get("description") or "").strip()
+                    name = structured_name or name
+                    desc = structured_desc or desc
                     product_image = product.get("image")
                     if isinstance(product_image, list):
                         product_image = product_image[0] if product_image else ""
                     if isinstance(product_image, dict):
                         product_image = product_image.get("url") or product_image.get("contentUrl")
-                    image_url = image_url or str(product_image or "").strip()
+                    image_url = str(product_image or "").strip() or image_url
                     offers = product.get("offers")
-                    if isinstance(offers, list):
-                        offers = offers[0] if offers else {}
-                    if not price and isinstance(offers, dict):
-                        price = offers.get("price") or offers.get("lowPrice")
+                    if not price:
+                        price = _price_from_offers(offers)
                     break
 
             if not image_url:

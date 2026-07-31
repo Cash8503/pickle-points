@@ -10,7 +10,7 @@
         <meta name="csrf-token" content="{{ csrf_token() }}" />
         <link
             rel="stylesheet"
-            href="{{ url_for('static', filename='editor.css') }}"
+            href="{{ url_for('static', filename='editor.css', v=static_asset_version('editor.css')) }}"
         />
     </head>
     <body class="{{ 'dark-mode' if dark_mode else '' }}">
@@ -461,6 +461,6 @@
             window.PICKLE_CSRF_TOKEN = "{{ csrf_token() }}";
             window.PICKLE_STORE_NUM = "{{ store_num }}";
         </script>
-        <script src="{{ url_for('static', filename='editor.js') }}"></script>
+        <script src="{{ url_for('static', filename='editor.js', v=static_asset_version('editor.js')) }}"></script>
     </body>
 </html>

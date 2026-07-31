@@ -18,6 +18,7 @@ AUDIT_LOG_PATH = os.path.join(CONFIGS_DIR, "audit.log")
 _LEGACY_JSON_DIR = CONFIGS_DIR
 
 logger = logging.getLogger(__name__)
+LEGACY_AUTOMATIC_ITEM_TYPES = {"smilemakers", "waytobe"}
 
 
 # ── DB helpers ────────────────────────────────────────────────
@@ -90,6 +91,55 @@ def _default_config():
     return default_config(APP_DIR)
 
 
+def normalize_automatic_items(cfg):
+    """Convert old vendor-specific items to the source-neutral automatic type."""
+    changed = 0
+    if not isinstance(cfg, dict):
+        return changed
+    for page in cfg.get("pages", []):
+        if not isinstance(page, dict):
+            continue
+        for item in page.get("items", []):
+            if isinstance(item, dict) and item.get("type") in LEGACY_AUTOMATIC_ITEM_TYPES:
+                item["type"] = "automatic"
+                changed += 1
+    return changed
+
+
+def migrate_vendor_items_to_automatic():
+    """Migrate every stored config, retaining a rollback copy before each change."""
+    migrated_items = 0
+    migrated_stores = 0
+    with _db() as conn:
+        rows = conn.execute("SELECT store_num, config_json FROM store_configs").fetchall()
+        for row in rows:
+            try:
+                cfg = json.loads(row["config_json"])
+            except (TypeError, json.JSONDecodeError):
+                logger.warning("Could not migrate invalid config for store %s", row["store_num"])
+                continue
+            changed = normalize_automatic_items(cfg)
+            if not changed:
+                continue
+            conn.execute(
+                "INSERT INTO store_config_backups (store_num, config_json, backed_up_at) VALUES (?,?,?)",
+                (row["store_num"], row["config_json"], time.time()),
+            )
+            conn.execute(
+                "UPDATE store_configs SET config_json=? WHERE store_num=?",
+                (json.dumps(cfg, ensure_ascii=False), row["store_num"]),
+            )
+            migrated_items += changed
+            migrated_stores += 1
+    if migrated_items:
+        logger.info(
+            "Migrated %d legacy vendor item(s) to automatic across %d store(s)",
+            migrated_items,
+            migrated_stores,
+        )
+    return migrated_items
+
+
 def _db_upsert(store_num, cfg):
     with _db() as conn:
         conn.execute(
@@ -116,7 +166,16 @@ def load_config(store_num):
             "SELECT config_json FROM store_configs WHERE store_num=?", (store_num,)
         ).fetchone()
     if row:
-        return json.loads(row["config_json"])
+        cfg = json.loads(row["config_json"])
+        # Covers configs imported after application startup.
+        if normalize_automatic_items(cfg):
+            backup_config(store_num)
+            with _db() as conn:
+                conn.execute(
+                    "UPDATE store_configs SET config_json=? WHERE store_num=?",
+                    (json.dumps(cfg, ensure_ascii=False), store_num),
+                )
+        return cfg
     cfg = _default_config()
     _db_upsert(store_num, cfg)
     return cfg
@@ -135,6 +194,7 @@ def backup_config(store_num):
 
 
 def save_config(cfg, store_num, editor=None):
+    normalize_automatic_items(cfg)
     cfg["last_edited_at"] = time.time()
     if editor:
         cfg["last_edited_by"] = editor

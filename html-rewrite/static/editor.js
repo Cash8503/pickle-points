@@ -526,7 +526,9 @@ function addAutomaticItem() {
   itemIdx = page.items.length - 1;
   renderItems();
   buildItemEditor();
-  scheduleSave();
+  markDirty();
+  setStatus('Add a product URL to finish this item', 'warn');
+  setTimeout(() => document.getElementById('url-entry')?.focus(), 0);
 }
 
 function addManualItem() {
@@ -661,10 +663,11 @@ function buildAutomaticEditor(ed, item) {
                style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:monospace;font-size:10px"
                onkeydown="if(event.key==='Enter'){event.preventDefault();urlAdd();}">
         <div class="url-actions">
-          <button onclick="urlAdd()">Add</button>
+          <button onclick="urlAdd()">Add URL</button>
           <button onclick="urlReplace()">Replace</button>
           <button onclick="urlRemove()">Remove</button>
         </div>
+        <div class="hint">Press Enter or click Add URL. The item saves after the URL is committed.</div>
         <div id="fetch-status"></div>
         <div id="fetch-errors">${fetchErrorsHtml(item)}</div>
       </div>
@@ -1085,7 +1088,7 @@ function refreshUrlSelect(item) {
   });
 }
 
-function urlAdd() {
+async function urlAdd() {
   const page = currentPage();
   const item = page && itemIdx!==null ? (page.items||[])[itemIdx] : null;
   if (!item) return;
@@ -1095,21 +1098,35 @@ function urlAdd() {
   item.urls.push(u);
   document.getElementById('url-entry').value = '';
   refreshUrlSelect(item);
+  const select = document.getElementById('url-select');
+  if (select) select.selectedIndex = item.urls.length - 1;
   renderItems();
-  scheduleSave();
+  const saved = await saveConfig({ reloadPreview: false });
+  if (!saved) return;
+  await fetchAndApplyUrl(item, u, 'Checking product');
+  reloadPreview();
 }
 
-function urlReplace() {
+async function urlReplace() {
   const page = currentPage();
   const item = page && itemIdx!==null ? (page.items||[])[itemIdx] : null;
   if (!item) return;
   const sel = document.getElementById('url-select');
   const u   = document.getElementById('url-entry').value.trim();
   if (sel.selectedIndex < 0 || !u) return;
-  item.urls[sel.selectedIndex] = u;
+  const selectedIndex = sel.selectedIndex;
+  const oldUrl = item.urls[selectedIndex];
+  item.urls[selectedIndex] = u;
+  document.getElementById('url-entry').value = '';
+  clearFetchError(item, oldUrl);
   refreshUrlSelect(item);
+  const refreshed = document.getElementById('url-select');
+  if (refreshed) refreshed.selectedIndex = selectedIndex;
   renderItems();
-  scheduleSave();
+  const saved = await saveConfig({ reloadPreview: false });
+  if (!saved) return;
+  await fetchAndApplyUrl(item, u, 'Checking product');
+  reloadPreview();
 }
 
 function urlRemove() {
@@ -1366,7 +1383,7 @@ function deleteTag() {
 // ──────────────────────────────────────────────────────────────────
 // Save / Preview
 // ──────────────────────────────────────────────────────────────────
-async function saveConfig() {
+async function saveConfig(options = {}) {
   clearTimeout(_saveTimer);
   clearTimeout(_settingsTimer);
   _saveTimer = null;
@@ -1376,7 +1393,7 @@ async function saveConfig() {
   if (validationErrors.length) {
     focusValidationError(validationErrors[0]);
     setStatus(validationErrors[0].message, 'err');
-    return;
+    return false;
   }
   setStatus('Saving\u2026', 'warn');
   saveInFlight = true;
@@ -1391,12 +1408,15 @@ async function saveConfig() {
       hasUnsavedChanges = false;
       setStatus('Saved ✓', 'ok');
       setTimeout(() => setStatus('Ready'), 2500);
-      reloadPreview();
+      if (options.reloadPreview !== false) reloadPreview();
+      return true;
     } else {
       handleBackendValidationError(d.error || '?');
+      return false;
     }
   } catch(e) {
     setStatus('Network error', 'err');
+    return false;
   } finally {
     saveInFlight = false;
     markCleanIfIdle();

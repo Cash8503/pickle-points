@@ -8,7 +8,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from api import register_routes
 from auth_db import init_db
-from config import migrate_json_to_db
+from config import migrate_json_to_db, migrate_vendor_items_to_automatic
 from services import start_cache_maintenance, warm_cache
 
 logging.basicConfig(
@@ -33,10 +33,20 @@ def _get_secret_key():
 def create_app():
     init_db()
     migrate_json_to_db()
+    migrate_vendor_items_to_automatic()
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.secret_key = _get_secret_key()
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+    def static_asset_version(filename):
+        """Use the file timestamp to prevent mixed old/new editor assets."""
+        try:
+            return os.stat(os.path.join(app.static_folder, filename)).st_mtime_ns
+        except OSError:
+            return 0
+
+    app.jinja_env.globals["static_asset_version"] = static_asset_version
 
     @app.after_request
     def _add_charset(response):

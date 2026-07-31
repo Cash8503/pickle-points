@@ -69,18 +69,18 @@ def _variant_swatches_html(variants):
     parts = []
     if style_vs:
         dots = ''.join(
-            f'<span style="flex-shrink:0;display:block;width:8pt;height:8pt;border-radius:50%;'
+            f'<span style="flex-shrink:0;display:block;width:7pt;height:7pt;border-radius:50%;'
             f'background:{v["value"]};border:0.4pt solid #bbb"></span>'
             if v.get('type') == 'color' else
             f'<span style="flex-shrink:0;display:flex;align-items:center;justify-content:center;'
-            f'width:8pt;height:8pt;border-radius:50%;'
+            f'width:7pt;height:7pt;border-radius:50%;'
             f'background:#f8f8f8;border:0.4pt solid #bbb;font-size:4.5pt;'
             f'font-weight:700">{v.get("value","")}</span>'
             for v in style_vs[:8]
         )
         parts.append(
             f'<div style="display:flex;flex-direction:row;align-items:center;'
-            f'gap:2pt;flex-wrap:wrap;flex-shrink:0">{dots}</div>'
+            f'gap:1.5pt;flex-wrap:wrap;flex-shrink:0">{dots}</div>'
         )
     if size_vs:
         ordered = sorted(
@@ -100,7 +100,7 @@ def _tag_badge_html(tag, tag_colors):
         return ''
     cols = tag_colors[tag]
     return (f'<span style="background:{cols["bg"]};color:{cols["text"]};'
-            f'font-size:5.5pt;font-weight:700;padding:1pt 5pt;border-radius:4pt;'
+            f'font-size:5pt;font-weight:700;padding:1pt 3pt;border-radius:4pt;'
             f'white-space:nowrap">{tag}</span>')
 
 def _uniform_approved_marker_html(size=12, label=False, approved=True):
@@ -450,20 +450,9 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 if unavailable else ''
             )
 
-            no_bottom_row = not swatch_html and not tag_html and not bottom_approved_html
-            if no_bottom_row:
-                outer_style = ('position:absolute;bottom:0;left:8pt;right:8pt;height:44pt;'
-                               'display:flex;flex-direction:column;align-items:flex-start;'
-                               'justify-content:center;gap:1pt')
-            else:
-                outer_style = ('position:absolute;bottom:22pt;left:8pt;right:8pt;height:22pt;'
-                               'display:flex;flex-direction:column;align-items:flex-start;'
-                               'justify-content:flex-end;gap:1pt')
-
             if pickle_value != 1:
                 points = pickles * pickle_value
-                price_html = (
-                    f'<div style="{outer_style}">'
+                price_content = (
                     f'<div style="display:flex;align-items:baseline;gap:3pt;line-height:1">'
                     f'<span style="font-size:19pt;font-weight:700;color:{accent};line-height:1"'
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
@@ -471,20 +460,25 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                     f'</div>'
                     f'<div style="font-size:6.5pt;font-weight:700;color:#9A8A76;line-height:1.05"'
                     f' contenteditable spellcheck="false">{points} PTS</div>'
-                    f'</div>'
                 )
             else:
-                price_html = (
-                    f'<div style="{outer_style}">'
+                price_content = (
                     f'<div style="display:flex;align-items:baseline;gap:3pt;line-height:1">'
                     f'<span style="font-size:20pt;font-weight:700;color:{accent};line-height:1"'
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
                     f'<span style="font-size:7pt;font-weight:700;color:#9A8A76">CHIPS</span>'
                     f'</div>'
-                    f'</div>'
                 )
-            if unavailable:
-                price_html = ''
+            extras_html = bottom_approved_html + swatch_html + tag_html
+            footer_html = '' if unavailable else (
+                '<div class="reward-footer" style="position:absolute;bottom:0;left:8pt;right:8pt;'
+                'height:44pt;display:flex;align-items:flex-start;padding-top:6pt;overflow:hidden">'
+                f'<div class="reward-price" style="flex:0 0 auto;display:flex;flex-direction:column;'
+                f'align-items:flex-start;gap:1pt">{price_content}</div>'
+                f'<div class="reward-meta" style="min-width:0;margin:4pt 0 0 6pt;display:flex;'
+                f'align-items:center;gap:3pt;flex-wrap:wrap">{extras_html}</div>'
+                '</div>'
+            )
 
             divider_html = '' if unavailable else (
                 f'<div class="reward-divider" style="position:absolute;bottom:{card_h - (card_h - 44)}pt;'
@@ -507,12 +501,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
          contenteditable spellcheck="false">{desc}</div>
   </div>
   {divider_html}
-  {price_html}
-  <div style="position:absolute;bottom:10pt;left:8pt;display:flex;align-items:center;gap:4pt;flex-wrap:wrap">
-    {bottom_approved_html}
-    {swatch_html}
-    {tag_html}
-  </div>
+  {footer_html}
   {unavailable_html}
 </div>'''
             card_cells.append(cell_html)
