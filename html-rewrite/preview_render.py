@@ -450,6 +450,11 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 if unavailable else ''
             )
 
+            extras_html = bottom_approved_html + swatch_html + tag_html
+            meta_html = (
+                f'<div class="reward-meta" style="min-width:0;margin-left:6pt;display:flex;'
+                f'align-items:center;gap:3pt;flex-wrap:wrap">{extras_html}</div>'
+            )
             if pickle_value != 1:
                 points = pickles * pickle_value
                 price_content = (
@@ -458,8 +463,10 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
                     f'<span style="font-size:6.5pt;font-weight:700;color:#9A8A76">CHIPS</span>'
                     f'</div>'
-                    f'<div style="font-size:6.5pt;font-weight:700;color:#9A8A76;line-height:1.05"'
+                    f'<div style="display:flex;align-items:center;line-height:1.05">'
+                    f'<div style="flex:0 0 auto;font-size:6.5pt;font-weight:700;color:#9A8A76"'
                     f' contenteditable spellcheck="false">{points} PTS</div>'
+                    f'{meta_html}</div>'
                 )
             else:
                 price_content = (
@@ -467,16 +474,14 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                     f'<span style="font-size:20pt;font-weight:700;color:{accent};line-height:1"'
                     f' contenteditable spellcheck="false">{pickles_str}</span>'
                     f'<span style="font-size:7pt;font-weight:700;color:#9A8A76">CHIPS</span>'
+                    f'{meta_html}'
                     f'</div>'
                 )
-            extras_html = bottom_approved_html + swatch_html + tag_html
             footer_html = '' if unavailable else (
                 '<div class="reward-footer" style="position:absolute;bottom:0;left:8pt;right:8pt;'
-                'height:44pt;display:flex;align-items:flex-start;padding-top:6pt;overflow:hidden">'
-                f'<div class="reward-price" style="flex:0 0 auto;display:flex;flex-direction:column;'
+                'height:44pt;display:block;padding-top:6pt;overflow:hidden">'
+                f'<div class="reward-price" style="display:flex;flex-direction:column;'
                 f'align-items:flex-start;gap:1pt">{price_content}</div>'
-                f'<div class="reward-meta" style="min-width:0;margin:4pt 0 0 6pt;display:flex;'
-                f'align-items:center;gap:3pt;flex-wrap:wrap">{extras_html}</div>'
                 '</div>'
             )
 
