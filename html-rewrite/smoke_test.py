@@ -446,6 +446,8 @@ def test_preview_frame_renders(client):
     assert b'class="reward-footer"' in response.data
     assert b'class="reward-price"' in response.data
     assert b'class="reward-meta"' in response.data
+    assert b'class="reward-variants"' in response.data
+    assert b'class="reward-tag"' in response.data
     assert response.data.find(b'class="reward-price"') < response.data.find(b'class="reward-meta"')
     assert b"10</span><span style=\"font-size:6.5pt;font-weight:700;color:#9A8A76\">CHIPS" in response.data
     assert b"50 PTS" in response.data
