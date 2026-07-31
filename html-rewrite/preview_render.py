@@ -113,31 +113,43 @@ def _collection_collage_html(collection_variants, approved_html):
     ]
     if not images:
         return ''
+    visible_images = images[:4]
+    image_count = len(visible_images)
+    if image_count == 1:
+        grid_style = 'grid-template-columns:1fr;grid-template-rows:1fr;'
+    elif image_count == 2:
+        grid_style = 'grid-template-columns:1fr;grid-template-rows:repeat(2,1fr);'
+    else:
+        grid_style = 'grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);'
+
     cells = ''.join(
-        f'<span style="display:flex;align-items:center;justify-content:center;overflow:hidden;'
-        f'background:#fff;border:0.35pt solid #eee;border-radius:2pt">'
+        f'<span class="collection-image-tile" style="display:flex;align-items:center;'
+        f'justify-content:center;overflow:hidden;background:#fff;'
+        f'border:0.4pt solid #D8D0C0;border-radius:1.5pt;box-sizing:border-box;'
+        f'{"grid-column:1 / span 2;width:calc(50% - 0.75pt);justify-self:center;" if image_count == 3 and index == 2 else ""}">'
         f'<img src="{image}" alt="" style="width:100%;height:100%;object-fit:contain;display:block">'
         f'</span>'
-        for image in images[:4]
+        for index, image in enumerate(visible_images)
     )
     extra = max(0, len(collection_variants or []) - 4)
     extra_html = (
-        f'<span class="collection-extra-count" style="position:absolute;right:-2pt;top:-3pt;'
+        f'<span class="collection-extra-count" style="position:absolute;right:1.5pt;top:1.5pt;'
         f'min-width:11pt;height:11pt;padding:0 2pt;border-radius:6pt;background:#1A1A1A;'
         f'color:#fff;border:1pt solid #fff;display:flex;align-items:center;justify-content:center;'
         f'font-size:5pt;font-weight:800;box-sizing:border-box">+{extra}</span>'
         if extra else ''
     )
     approved_overlay = (
-        f'<span class="uniform-marker-overlay" style="position:absolute;right:-1pt;bottom:-1pt;'
+        f'<span class="uniform-marker-overlay" style="position:absolute;right:1.5pt;bottom:1.5pt;'
         f'display:flex;align-items:center;justify-content:center;'
         f'filter:drop-shadow(0 0.8pt 1.2pt rgba(0,0,0,.24))">{approved_html}</span>'
         if approved_html else ''
     )
     return (
-        f'<span class="collection-collage" style="float:right;width:50pt;height:50pt;'
-        f'margin:0 0 4pt 7pt;display:grid;grid-template-columns:repeat(2,1fr);'
-        f'grid-template-rows:repeat(2,1fr);gap:1pt;position:relative">'
+        f'<span class="collection-collage collection-collage-{image_count}" '
+        f'style="float:right;width:48pt;height:48pt;margin:0 0 4pt 7pt;display:grid;'
+        f'{grid_style}gap:1.5pt;padding:1pt;background:#E8E2D6;'
+        f'border:0.4pt solid #D8D0C0;border-radius:3pt;box-sizing:border-box;position:relative">'
         f'{cells}{extra_html}{approved_overlay}</span>'
     )
 

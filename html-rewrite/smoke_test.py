@@ -15,7 +15,7 @@ from config import normalize_automatic_items
 from config_schema import validate_config
 from main import app
 from order_render import _item_sheets
-from preview_render import render_preview_html
+from preview_render import _collection_collage_html, render_preview_html
 
 
 TEST_CONFIG = {
@@ -526,11 +526,23 @@ def test_small_item_collection():
 
     with app.app_context():
         rendered = render_preview_html(pages, per_pickle, pickle_value, cfg["tag_colors"])
-    assert 'class="collection-collage"' in rendered
+    assert 'class="collection-collage collection-collage-4"' in rendered
     assert 'class="collection-extra-count"' in rendered
     assert ">+1</span>" in rendered
     assert ">5 STYLES</span>" in rendered
     assert ">POPULAR</span>" in rendered
+
+    two_image_collage = _collection_collage_html(item["collection_variants"][:2], "approved")
+    assert "collection-collage-2" in two_image_collage
+    assert "grid-template-columns:1fr;grid-template-rows:repeat(2,1fr)" in two_image_collage
+    assert "right:1.5pt;bottom:1.5pt" in two_image_collage
+
+    three_image_collage = _collection_collage_html(item["collection_variants"][:3], "")
+    assert "collection-collage-3" in three_image_collage
+    assert "grid-column:1 / span 2" in three_image_collage
+    assert "justify-self:center" in three_image_collage
+    assert "gap:1.5pt;padding:1pt;background:#E8E2D6" in three_image_collage
+    assert "right:-" not in three_image_collage
 
     sheets = _item_sheets(pages, per_pickle, pickle_value)
     assert sheets[0]["style_hint"] == "Happy Meal, Ice Cream Cone, Cup, Big Mac, Fry"
