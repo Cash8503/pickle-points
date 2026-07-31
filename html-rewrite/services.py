@@ -659,8 +659,8 @@ def resolve_items_for_preview(cfg):
                         "uniform_approved": item.get("uniform_approved", False),
                         "_unavailable": True,
                     }
-                fn, fd, fi, fp, fetched_size_variants = fetch_vendor_product(urls[0])
-                variant_type = item.get("variant_type", "color")
+                primary_product = fetch_vendor_product(urls[0])
+                fn, fd, fi, fp, _ = primary_product
                 image_url = item.get("image") or fi
                 page_price = item.get("price") or fp
 
@@ -681,34 +681,40 @@ def resolve_items_for_preview(cfg):
                         "_unavailable": True,
                     }
 
-                if variant_type == "sex":
-                    variants = []
-                    cleaned = strip_sex_words(fn)
-                    if cleaned: fn = cleaned
-                    for vurl in urls:
-                        vn, _, _, _, _ = fetch_vendor_product(vurl)
-                        sex_label = _detect_sex_label(vn)
-                        if sex_label:
-                            variants.append({"type":"sex","value":sex_label})
-                elif len(urls) > 1:
-                    variants = []
-                    for vurl in urls:
-                        _, _, vimg, _, _ = fetch_vendor_product(vurl)
-                        if vimg:
-                            cols = extract_dominant_colors(vimg, 1)
-                            if cols:
-                                variants.append({"type":"color","value":cols[0]})
-                else:
-                    variants = []
+                fetched_products = [primary_product]
+                fetched_products.extend(fetch_vendor_product(vurl) for vurl in urls[1:])
+                sex_variants = []
+                color_variants = []
+                fetched_size_variants = []
+                for vn, _, vimg, _, vsize_variants in fetched_products:
+                    fetched_size_variants.extend(vsize_variants or [])
+                    sex_label = _detect_sex_label(vn or "")
+                    if sex_label:
+                        sex_variants.append({"type": "sex", "value": sex_label})
+                    if len(urls) > 1 and vimg:
+                        colors = extract_dominant_colors(vimg, 1)
+                        if colors:
+                            color_variants.append({"type": "color", "value": colors[0]})
 
-                if variant_type == "color" and len(urls) > 1:
+                if sex_variants:
+                    cleaned = strip_sex_words(fn)
+                    if cleaned:
+                        fn = cleaned
+                    fd = strip_sex_words(fd)
+                if color_variants:
                     fn = strip_color_words(fn)
                     fd = strip_color_words(fd)
 
                 desc_override = item.get("desc")
                 desc = desc_override if desc_override is not None else fd
                 desc, override_size_variants = extract_size_variants(desc or "")
-                variants = _merge_variants(variants, fetched_size_variants, override_size_variants)
+                variants = _merge_variants(
+                    item.get("variants", []),
+                    sex_variants,
+                    color_variants,
+                    fetched_size_variants,
+                    override_size_variants,
+                )
 
                 pickles = item.get("pickles", item.get("points"))
                 if pickles is None and page_price is not None:

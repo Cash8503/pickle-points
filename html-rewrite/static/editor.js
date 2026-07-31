@@ -29,6 +29,7 @@ async function boot() {
   (cfg.pages || []).forEach(page => {
     (page.items || []).forEach(item => {
       if (item.type === 'smilemakers' || item.type === 'waytobe') item.type = 'automatic';
+      if (item.type === 'automatic') delete item.variant_type;
     });
   });
   populateSettings();
@@ -594,7 +595,7 @@ function copyPreviousItemFields() {
   const item = items[itemIdx];
   if (!prev || !item) return;
 
-  ['tag', 'variant_type', 'pickles', 'points', 'price', 'uniform_approved'].forEach(key => {
+  ['tag', 'pickles', 'points', 'price', 'uniform_approved'].forEach(key => {
     if (prev[key] === undefined || prev[key] === null || prev[key] === '') {
       delete item[key];
     } else {
@@ -686,13 +687,7 @@ function buildAutomaticEditor(ed, item) {
         <option value="weekend" ${item.uniform_approved==='weekend'?'selected':''}>Weekends Only</option>
       </select>
     </div>
-    <div class="ed-row">
-      <label>Variants</label>
-      <select id="ed-variant-type" onchange="itemSet('variant_type', this.value)">
-        <option value="color" ${item.variant_type!=='sex'?'selected':''}>color</option>
-        <option value="sex"   ${item.variant_type==='sex'?'selected':''}>sex</option>
-      </select>
-    </div>
+    <div class="overrides-note">Sex, color, and size variants are detected automatically from the linked products.</div>
     <hr class="ed-sep">
     <div class="overrides-note">Overrides &mdash; blank = auto from URL</div>
     <div class="ed-row">

@@ -92,7 +92,7 @@ def _default_config():
 
 
 def normalize_automatic_items(cfg):
-    """Convert old vendor-specific items to the source-neutral automatic type."""
+    """Normalize automatic items and remove obsolete manual variant selection."""
     changed = 0
     if not isinstance(cfg, dict):
         return changed
@@ -100,8 +100,16 @@ def normalize_automatic_items(cfg):
         if not isinstance(page, dict):
             continue
         for item in page.get("items", []):
-            if isinstance(item, dict) and item.get("type") in LEGACY_AUTOMATIC_ITEM_TYPES:
+            if not isinstance(item, dict):
+                continue
+            item_changed = False
+            if item.get("type") in LEGACY_AUTOMATIC_ITEM_TYPES:
                 item["type"] = "automatic"
+                item_changed = True
+            if item.get("type") == "automatic" and "variant_type" in item:
+                del item["variant_type"]
+                item_changed = True
+            if item_changed:
                 changed += 1
     return changed
 
@@ -133,7 +141,7 @@ def migrate_vendor_items_to_automatic():
             migrated_stores += 1
     if migrated_items:
         logger.info(
-            "Migrated %d legacy vendor item(s) to automatic across %d store(s)",
+            "Normalized %d automatic item(s) across %d store(s)",
             migrated_items,
             migrated_stores,
         )

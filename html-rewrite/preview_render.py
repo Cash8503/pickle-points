@@ -474,7 +474,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 'grid-template-rows:12pt 12pt;row-gap:2pt;align-content:start;padding-top:1pt">'
                 f'<div class="reward-variants" style="min-width:0;display:flex;align-items:center;'
                 f'gap:3pt;overflow:hidden">{bottom_approved_html}{swatch_html}</div>'
-                f'<div class="reward-tag" style="display:flex;align-items:center;overflow:hidden">'
+                f'<div class="reward-tag" style="display:flex;align-items:center;justify-content:center;overflow:hidden">'
                 f'{tag_html}</div>'
                 '</div>'
             )

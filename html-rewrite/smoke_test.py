@@ -319,13 +319,15 @@ def test_editor_has_no_admin_cache_controls(client):
     assert b"await saveConfig({ reloadPreview: false })" in script.data
     assert b"await fetchAndApplyUrl(item, u, 'Checking product')" in script.data
     assert b"Product fetch failed (HTTP ${r.status})" in script.data
+    assert b"ed-variant-type" not in script.data
+    assert b"Sex, color, and size variants are detected automatically" in script.data
 
 
 def test_legacy_item_migration():
     cfg = {
         "pages": [{"items": [
-            {"type": "smilemakers", "urls": ["https://smilemakersonline.com/item"]},
-            {"type": "waytobe", "urls": ["https://www.freshfashionsandmore.com/item"]},
+            {"type": "smilemakers", "variant_type": "color", "urls": ["https://smilemakersonline.com/item"]},
+            {"type": "waytobe", "variant_type": "sex", "urls": ["https://www.freshfashionsandmore.com/item"]},
             {"type": "manual", "name": "Manual"},
         ]}],
     }
@@ -336,6 +338,11 @@ def test_legacy_item_migration():
     assert cfg["pages"][0]["items"][1]["urls"] == [
         "https://www.freshfashionsandmore.com/item",
     ]
+    assert all(
+        "variant_type" not in item
+        for item in cfg["pages"][0]["items"]
+        if item["type"] == "automatic"
+    )
     assert normalize_automatic_items(cfg) == 0
 
 
@@ -432,6 +439,42 @@ def test_unavailable_automatic_cards():
     assert available_pages[0]["items"][0]["_unavailable"] is False
 
 
+def test_automatic_sex_and_color_variants():
+    male_url = "https://shop.example.test/mens-token-black-jacket"
+    female_url = "https://shop.example.test/ladies-token-red-jacket"
+    products = {
+        male_url: ("Men's Token Black Jacket", "A black jacket. Sizes: S-XL.", "image-black", 20.0, []),
+        female_url: ("Ladies Token Red Jacket", "A red jacket. Sizes: S-XL.", "image-red", 20.0, []),
+    }
+    cfg = {
+        **TEST_CONFIG,
+        "pages": [{
+            "title": "Automatic variants",
+            "items": [{"type": "automatic", "urls": [male_url, female_url]}],
+            "layout": {"cols": 4},
+        }],
+    }
+    original_fetch = services.fetch_vendor_product
+    original_colors = services.extract_dominant_colors
+    try:
+        services.fetch_vendor_product = lambda url: products[url]
+        services.extract_dominant_colors = lambda image, count: {
+            "image-black": ["#111111"],
+            "image-red": ["#CC0000"],
+        }[image]
+        pages, _, _ = services.resolve_items_for_preview(cfg)
+    finally:
+        services.fetch_vendor_product = original_fetch
+        services.extract_dominant_colors = original_colors
+
+    item = pages[0]["items"][0]
+    variant_pairs = {(variant["type"], variant["value"]) for variant in item["variants"]}
+    assert item["name"] == "Token Jacket"
+    assert {("sex", "M"), ("sex", "F")} <= variant_pairs
+    assert {("color", "#111111"), ("color", "#CC0000")} <= variant_pairs
+    assert {("size", "SM"), ("size", "M"), ("size", "L"), ("size", "XL")} <= variant_pairs
+
+
 def test_preview_frame_renders(client):
     seed_session(client)
     with patched(load_config=lambda store_num: TEST_CONFIG):
@@ -448,6 +491,7 @@ def test_preview_frame_renders(client):
     assert b'class="reward-meta"' in response.data
     assert b'class="reward-variants"' in response.data
     assert b'class="reward-tag"' in response.data
+    assert b'class="reward-tag" style="display:flex;align-items:center;justify-content:center' in response.data
     assert response.data.find(b'class="reward-price"') < response.data.find(b'class="reward-meta"')
     assert b"10</span><span style=\"font-size:6.5pt;font-weight:700;color:#9A8A76\">CHIPS" in response.data
     assert b"50 PTS" in response.data
@@ -496,6 +540,7 @@ def run_tests():
     runner.check("editor has no admin cache controls", lambda: test_editor_has_no_admin_cache_controls(client))
     runner.check("legacy vendor items migrate to automatic", test_legacy_item_migration)
     runner.check("automatic item parses product JSON-LD", test_automatic_page_parsing)
+    runner.check("automatic items detect sex and color variants", test_automatic_sex_and_color_variants)
     runner.check("unavailable automatic cards hide or show", test_unavailable_automatic_cards)
     runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))
     runner.check("order tracker renders printable order sheet", lambda: test_order_tracker_renders(client))
