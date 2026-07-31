@@ -471,6 +471,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             collection_variants = item.get('collection_variants', [])
             approved = item.get('uniform_approved', False)
             unavailable = bool(item.get('_unavailable', False))
+            is_collection = item.get('type') == 'collection'
 
             pickles_str = str(pickles)
 
@@ -510,6 +511,16 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 'letter-spacing:.2pt;pointer-events:none">Not currently available.</div>'
                 if unavailable else ''
             )
+            collection_disclaimer_html = (
+                '<div class="collection-separate-disclaimer" '
+                'style="position:absolute;left:8pt;right:8pt;bottom:48pt;height:10pt;'
+                'display:flex;align-items:center;justify-content:center;box-sizing:border-box;'
+                'background:#FFF6D8;border:0.5pt solid #E2C66E;border-radius:3pt;'
+                'color:#765300;font-size:5.2pt;font-weight:800;letter-spacing:.15pt;'
+                'line-height:1;white-space:nowrap">EACH STYLE SOLD SEPARATELY</div>'
+                if is_collection and not unavailable else ''
+            )
+            copy_bottom = '61pt' if collection_disclaimer_html else '48pt'
 
             if pickle_value != 1:
                 points = pickles * pickle_value
@@ -560,7 +571,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
      height:{card_h}pt;overflow:hidden;break-inside:avoid;page-break-inside:avoid">
   <div style="position:absolute;top:0;left:0;right:0;height:8pt;
               background:{accent};border-radius:8pt 8pt 0 0"></div>
-  <div class="reward-copy" style="position:absolute;top:11pt;left:8pt;right:8pt;bottom:48pt;
+  <div class="reward-copy" style="position:absolute;top:11pt;left:8pt;right:8pt;bottom:{copy_bottom};
               overflow:hidden;overflow-wrap:anywhere;word-break:break-word">
     {floating_img_html}
     <div class="reward-name" style="font-size:9pt;font-weight:700;color:#1A1A1A;line-height:1.16;
@@ -569,6 +580,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
     <div class="reward-desc" style="font-size:6.5pt;color:#9A8A76;line-height:1.25"
          contenteditable spellcheck="false">{desc}</div>
   </div>
+  {collection_disclaimer_html}
   {divider_html}
   {footer_html}
   {unavailable_html}

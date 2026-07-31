@@ -531,6 +531,9 @@ def test_small_item_collection():
     assert ">+1</span>" in rendered
     assert ">5 STYLES</span>" in rendered
     assert ">POPULAR</span>" in rendered
+    assert 'class="collection-separate-disclaimer"' in rendered
+    assert "EACH STYLE SOLD SEPARATELY" in rendered
+    assert "bottom:61pt" in rendered
 
     two_image_collage = _collection_collage_html(item["collection_variants"][:2], "approved")
     assert "collection-collage-2" in two_image_collage
