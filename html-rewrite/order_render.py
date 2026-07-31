@@ -68,7 +68,7 @@ def _item_sheets(pages, per_pickle, pickle_value):
             continue
         section = page.get("section_label") or page.get("title") or "Items"
         for item in page.get("items") or []:
-            if not item:
+            if not item or item.get("_unavailable"):
                 continue
             pickles = item.get("pickles", 0) or 0
             price = item.get("price")

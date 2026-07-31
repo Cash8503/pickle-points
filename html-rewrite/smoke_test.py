@@ -10,7 +10,9 @@ import re
 import sys
 
 import api
+import services
 from main import app
+from preview_render import render_preview_html
 
 
 TEST_CONFIG = {
@@ -249,6 +251,30 @@ def test_config_api(client):
         assert response.get_json() == {"ok": True}
         assert saved and saved[0][0] == "1001"
 
+        automatic_config = {
+            **TEST_CONFIG,
+            "settings": {**TEST_CONFIG["settings"], "show_unavailable_cards": True},
+            "pages": [{"items": [{"type": "automatic", "urls": ["https://waytobe.com/product/example"]}]}],
+        }
+        response = client.post("/api/config", json=automatic_config)
+        assert response.status_code == 200
+
+        # Existing saved configs remain valid while the editor migrates them to automatic.
+        legacy_config = {
+            **TEST_CONFIG,
+            "pages": [{"items": [{"type": "waytobe", "urls": ["https://waytobe.com/product/example"]}]}],
+        }
+        response = client.post("/api/config", json=legacy_config)
+        assert response.status_code == 200
+
+        invalid_setting = {
+            **TEST_CONFIG,
+            "settings": {**TEST_CONFIG["settings"], "show_unavailable_cards": "yes"},
+        }
+        response = client.post("/api/config", json=invalid_setting)
+        assert response.status_code == 400
+        assert "settings.show_unavailable_cards" in response.get_json()["error"]
+
         bad_config = {**TEST_CONFIG, "pages": [{"items": [{"type": "smilemakers", "urls": [""]}]}]}
         response = client.post("/api/config", json=bad_config)
         assert response.status_code == 400
@@ -279,6 +305,84 @@ def test_editor_has_no_admin_cache_controls(client):
     assert b"/admin/cache/" not in response.data
     assert b"Warm All Stores" not in response.data
     assert b"Clear All Cache" not in response.data
+    assert b"+ Automatic" in response.data
+    assert b"+ SmileMakers" not in response.data
+    assert b"+ WayToBe" not in response.data
+    assert b"Show unavailable cards" in response.data
+
+
+def test_automatic_page_parsing():
+    url = "https://shop.example.test/products/dynamic-item"
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {"@context":"https://schema.org","@graph":[
+          {"@type":"Product","name":"Dynamic Jacket",
+           "description":"Sizes: S-XL. A lightweight jacket.",
+           "image":"/images/jacket.png","offers":{"lowPrice":"$12.50"}}
+        ]}
+      </script>
+    </head><body></body></html>
+    """
+
+    class FakeResponse:
+        def __init__(self, text, response_url):
+            self.text = text
+            self.url = response_url
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    original_get = services.requests.get
+    original_load = services.load_disk_cache
+    original_persist = services._persist_entry
+    try:
+        services._SMILEMAKERS_CACHE.pop(url, None)
+        services.requests.get = lambda *args, **kwargs: FakeResponse(html, url)
+        services.load_disk_cache = lambda: None
+        services._persist_entry = lambda *args, **kwargs: None
+        name, desc, image, price, sizes = services.fetch_vendor_product(url)
+    finally:
+        services.requests.get = original_get
+        services.load_disk_cache = original_load
+        services._persist_entry = original_persist
+        services._SMILEMAKERS_CACHE.pop(url, None)
+
+    assert name == "Dynamic Jacket"
+    assert desc == "A lightweight jacket."
+    assert image == "https://shop.example.test/images/jacket.png"
+    assert price == 12.50
+    assert [variant["value"] for variant in sizes] == ["SM", "M", "L", "XL"]
+
+
+def test_unavailable_automatic_cards():
+    cfg = {
+        **TEST_CONFIG,
+        "settings": {**TEST_CONFIG["settings"], "show_unavailable_cards": False},
+        "pages": [{
+            "title": "Automatic",
+            "items": [{"type": "automatic", "urls": ["https://shop.example.test/missing"]}],
+            "layout": {"cols": 4},
+        }],
+    }
+    original_fetch = services.fetch_vendor_product
+    try:
+        services.fetch_vendor_product = lambda url: ("", "", "", None, [])
+        hidden_pages, per_pickle, pickle_value = services.resolve_items_for_preview(cfg)
+        assert hidden_pages[0]["items"] == []
+
+        cfg["settings"]["show_unavailable_cards"] = True
+        shown_pages, per_pickle, pickle_value = services.resolve_items_for_preview(cfg)
+    finally:
+        services.fetch_vendor_product = original_fetch
+
+    assert len(shown_pages[0]["items"]) == 1
+    assert shown_pages[0]["items"][0]["_unavailable"] is True
+    with app.app_context():
+        rendered = render_preview_html(shown_pages, per_pickle, pickle_value, {})
+    assert "Not currently available." in rendered
+    assert "unavailable-card-label" in rendered
 
 
 def test_preview_frame_renders(client):
@@ -311,11 +415,15 @@ def test_order_tracker_renders(client):
     assert b"/static/pickle.svg" in response.data
     assert b'rowspan="3"' in response.data
     assert b"Each item has 3 blank crew order lines" in response.data
-    assert b"Extra Orders" in response.data
+    assert b"Other Orders" in response.data
     assert b"extra-orders" in response.data
     assert b"order-color-swatch" in response.data
     assert b"50 pts" in response.data
-    assert re.search(rb'class="number-cell"[^>]*rowspan="3"[^>]*>\s*10\s*<span class="chip-note">50 pts</span>', response.data)
+    assert re.search(
+        rb'class="number-cell"\s+rowspan="3"[^>]*>\s*10\s*'
+        rb'<span class="chip-note"\s*>\s*50 pts</span\s*>',
+        response.data,
+    )
     assert b">Qty<" not in response.data
     assert b"col-qty" not in response.data
     assert b'<td class="line-num">32</td>' not in response.data
@@ -333,6 +441,8 @@ def run_tests():
     runner.check("/api/config GET and POST with session", lambda: test_config_api(client))
     runner.check("admin-only routes reject normal users", lambda: test_admin_only_routes_reject_normal_users(client))
     runner.check("editor has no admin cache controls", lambda: test_editor_has_no_admin_cache_controls(client))
+    runner.check("automatic item parses product JSON-LD", test_automatic_page_parsing)
+    runner.check("unavailable automatic cards hide or show", test_unavailable_automatic_cards)
     runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))
     runner.check("order tracker renders printable order sheet", lambda: test_order_tracker_renders(client))
 

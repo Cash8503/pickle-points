@@ -150,7 +150,7 @@ def _build_earn_page_div(page, pi, total, pickle_value, accent, title, subtitle,
         if p.get('type') == 'earn':
             continue
         for item in (p.get('items') or []):
-            if item and item.get('image'):
+            if item and not item.get('_unavailable') and item.get('image'):
                 all_images.append(item['image'])
 
     rng = random.Random(pi * 99991 + 13)
@@ -411,12 +411,13 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             image    = item.get('image', '')
             variants = item.get('variants', [])
             approved = item.get('uniform_approved', False)
+            unavailable = bool(item.get('_unavailable', False))
 
             pickles_str = str(pickles)
 
             tag_html  = _tag_badge_html(tag, tag_colors)
             swatch_html = _variant_swatches_html(variants)
-            approved_html = _uniform_approved_marker_html(10, approved=approved)
+            approved_html = '' if unavailable else _uniform_approved_marker_html(10, approved=approved)
             bottom_approved_html = '' if image else approved_html
             image_approved_html = (
                 f'<span class="uniform-marker-overlay" style="position:absolute;right:1pt;bottom:1pt;'
@@ -436,6 +437,17 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 f'display:flex;align-items:flex-start;justify-content:center;position:relative">'
                 f'{img_html}{image_approved_html}</span>'
                 if image else ''
+            )
+            unavailable_html = (
+                '<div class="unavailable-card-label" '
+                'style="position:absolute;z-index:20;left:-20%;top:50%;width:140%;'
+                'transform:translateY(-50%) rotate(-16deg);background:#C62828;color:#fff;'
+                'border-top:1.5pt solid rgba(255,255,255,.8);'
+                'border-bottom:1.5pt solid rgba(255,255,255,.8);'
+                'box-shadow:0 2pt 5pt rgba(0,0,0,.28);padding:6pt 2pt;'
+                'font-size:9pt;font-weight:800;line-height:1;text-align:center;'
+                'letter-spacing:.2pt;pointer-events:none">Not currently available.</div>'
+                if unavailable else ''
             )
 
             no_bottom_row = not swatch_html and not tag_html and not bottom_approved_html
@@ -471,6 +483,13 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                     f'</div>'
                     f'</div>'
                 )
+            if unavailable:
+                price_html = ''
+
+            divider_html = '' if unavailable else (
+                f'<div class="reward-divider" style="position:absolute;bottom:{card_h - (card_h - 44)}pt;'
+                f'left:8pt;right:8pt;border-top:0.7pt dashed #E8DFC8"></div>'
+            )
 
             cell_html = f'''
 <div class="reward-card" style="position:relative;background:#fff;border-radius:8pt;
@@ -487,19 +506,19 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
     <div class="reward-desc" style="font-size:6.5pt;color:#9A8A76;line-height:1.25"
          contenteditable spellcheck="false">{desc}</div>
   </div>
-  <div class="reward-divider" style="position:absolute;bottom:{card_h - (card_h - 44)}pt;
-              left:8pt;right:8pt;border-top:0.7pt dashed #E8DFC8"></div>
+  {divider_html}
   {price_html}
   <div style="position:absolute;bottom:10pt;left:8pt;display:flex;align-items:center;gap:4pt;flex-wrap:wrap">
     {bottom_approved_html}
     {swatch_html}
     {tag_html}
   </div>
+  {unavailable_html}
 </div>'''
             card_cells.append(cell_html)
 
         # "Coming soon" if needed
-        if items and len(items) % cols != 0:
+        if card_cells and len(card_cells) % cols != 0:
             card_cells.append(f'''
 <div class="reward-card coming-soon-card" style="background:#F2F2F2;border-radius:8pt;
      border:1.5pt dashed #7AAD35;height:{card_h}pt;

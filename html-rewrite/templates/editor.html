@@ -144,6 +144,17 @@
                         </label>
                     </div>
                     <div class="setting-group">
+                        <label class="check-setting">
+                            <input
+                                type="checkbox"
+                                id="s-show-unavailable-cards"
+                                onchange="scheduleSettingsSave()"
+                            />
+                            Show unavailable cards
+                        </label>
+                        <div class="hint">Mark unreachable automatic items instead of hiding them</div>
+                    </div>
+                    <div class="setting-group">
                         <label>PDF Title</label>
                         <input
                             type="text"
@@ -274,7 +285,7 @@
                         <button class="danger" onclick="delItem()">Delete</button>
                     </div>
                     <div class="btn-row">
-                        <button onclick="addSmItem()">+ SmileMakers</button>
+                        <button onclick="addAutomaticItem()">+ Automatic</button>
                         <button onclick="addManualItem()">+ Manual</button>
                     </div>
                     <div class="ctx-hint">

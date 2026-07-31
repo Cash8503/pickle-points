@@ -12,6 +12,11 @@ let itemFilterText = '';
 let userDarkMode = !!window.PICKLE_USER_DARK_MODE;
 let hasUnsavedChanges = false;
 let saveInFlight = false;
+const AUTOMATIC_ITEM_TYPES = new Set(['automatic', 'smilemakers', 'waytobe']);
+
+function isAutomaticItem(item) {
+  return !!item && AUTOMATIC_ITEM_TYPES.has(item.type);
+}
 
 // ──────────────────────────────────────────────────────────────────
 // Boot
@@ -20,6 +25,12 @@ async function boot() {
   setStatus('Loading config\u2026');
   const r = await fetch('/api/config');
   cfg = await r.json();
+  // Migrate the two old vendor-specific item types the next time this config is saved.
+  (cfg.pages || []).forEach(page => {
+    (page.items || []).forEach(item => {
+      if (item.type === 'smilemakers' || item.type === 'waytobe') item.type = 'automatic';
+    });
+  });
   populateSettings();
   renderPages();
   renderTagSwatches();
@@ -177,6 +188,7 @@ function populateSettings() {
   document.getElementById('s-pickle-value').value =
     s.pickle_chip_value ?? s.pickle_pickle_value ?? s.pickle_point_value ?? 1;
   document.getElementById('s-concurrency').value = s.fetch_concurrency ?? 5;
+  document.getElementById('s-show-unavailable-cards').checked = s.show_unavailable_cards ?? false;
   document.getElementById('s-dark-mode').checked = userDarkMode;
   document.getElementById('s-pdf-title').value   = cfg.pdf_title || '';
   document.getElementById('s-output-path').value = cfg.output_path || '';
@@ -188,6 +200,7 @@ function collectSettings() {
   cfg.settings.price_per_pickle   = parseFloat(document.getElementById('s-price-per-pickle').value) || 0.50;
   cfg.settings.pickle_chip_value  = parseInt(document.getElementById('s-pickle-value').value) || 1;
   cfg.settings.fetch_concurrency  = parseInt(document.getElementById('s-concurrency').value) || 5;
+  cfg.settings.show_unavailable_cards = !!document.getElementById('s-show-unavailable-cards').checked;
   cfg.pdf_title   = document.getElementById('s-pdf-title').value.trim();
   cfg.output_path = document.getElementById('s-output-path').value.trim();
   // Remove legacy keys so config stays clean
@@ -459,8 +472,9 @@ function renderItems() {
     });
 
     const badge = document.createElement('span');
-    badge.className = 'item-badge ' + (item.type === 'smilemakers' ? 'badge-sm' : 'badge-man');
-    badge.textContent = item.type === 'smilemakers' ? 'SM' : 'M';
+    const automatic = isAutomaticItem(item);
+    badge.className = 'item-badge ' + (automatic ? 'badge-sm' : 'badge-man');
+    badge.textContent = automatic ? 'A' : 'M';
 
     const name = document.createElement('span');
     name.className = 'item-name';
@@ -472,7 +486,7 @@ function renderItems() {
 }
 
 function itemListLabel(item) {
-  if (item.type === 'smilemakers') {
+  if (isAutomaticItem(item)) {
     const u = (item.urls || [])[0] || '?';
     const slug = u.replace(/\/$/, '').split('/').pop();
     const extra = (item.urls || []).length > 1 ? ` +${item.urls.length - 1}` : '';
@@ -504,11 +518,11 @@ function selectItem(i) {
   openMobileEdit();
 }
 
-function addSmItem() {
+function addAutomaticItem() {
   const page = currentPage();
   if (!page) return;
   page.items = page.items || [];
-  page.items.push({ type: 'smilemakers', urls: [] });
+  page.items.push({ type: 'automatic', urls: [] });
   itemIdx = page.items.length - 1;
   renderItems();
   buildItemEditor();
@@ -626,24 +640,24 @@ function buildItemEditor() {
   ed.style.display = 'block';
   ed.innerHTML = '';
 
-  if (item.type === 'smilemakers') {
-    buildSmEditor(ed, item);
+  if (isAutomaticItem(item)) {
+    buildAutomaticEditor(ed, item);
   } else {
     buildManualEditor(ed, item);
   }
 }
 
-function buildSmEditor(ed, item) {
+function buildAutomaticEditor(ed, item) {
   const tags = ['', ...Object.keys(cfg.tag_colors || {})];
   ed.innerHTML = `
-    <div class="editor-title">SmileMakers Item</div>
+    <div class="editor-title">Automatic Item</div>
     <div class="ed-row">
       <label>URLs</label>
       <div style="flex:1">
         <div class="url-list-box">
           <select id="url-select" size="4" style="width:100%;border:none;font-family:monospace;font-size:10px"></select>
         </div>
-        <input type="text" id="url-entry" placeholder="https://smilemakersonline.com/product/"
+        <input type="text" id="url-entry" placeholder="https://example.com/product/..."
                style="width:100%;margin-top:4px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:monospace;font-size:10px"
                onkeydown="if(event.key==='Enter'){event.preventDefault();urlAdd();}">
         <div class="url-actions">
@@ -1358,7 +1372,7 @@ async function saveConfig() {
   _saveTimer = null;
   _settingsTimer = null;
   collectSettings();
-  const validationErrors = validateSmilemakersUrls();
+  const validationErrors = validateAutomaticUrls();
   if (validationErrors.length) {
     focusValidationError(validationErrors[0]);
     setStatus(validationErrors[0].message, 'err');
@@ -1389,16 +1403,16 @@ async function saveConfig() {
   }
 }
 
-function validateSmilemakersUrls() {
+function validateAutomaticUrls() {
   const errors = [];
   const seen = new Map();
   (cfg.pages || []).forEach((page, pidx) => {
     (page.items || []).forEach((item, iidx) => {
-      if (item.type !== 'smilemakers') return;
+      if (!isAutomaticItem(item)) return;
       const label = `Page ${pidx + 1}, item ${iidx + 1}`;
       const urls = item.urls || [];
       if (!urls.length) {
-        errors.push({ message: `${label}: add at least one SmileMakers URL`, pageIdx: pidx, itemIdx: iidx, fieldId: 'url-entry' });
+        errors.push({ message: `${label}: add at least one product URL`, pageIdx: pidx, itemIdx: iidx, fieldId: 'url-entry' });
         return;
       }
       urls.forEach((raw, uidx) => {
@@ -1414,8 +1428,8 @@ function validateSmilemakersUrls() {
           errors.push({ message: `${label}: URL ${uidx + 1} is not a valid URL`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
           return;
         }
-        if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes('smilemakersonline.com')) {
-          errors.push({ message: `${label}: URL ${uidx + 1} must be a SmileMakers URL`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
+        if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname) {
+          errors.push({ message: `${label}: URL ${uidx + 1} must use HTTP or HTTPS`, pageIdx: pidx, itemIdx: iidx, urlIdx: uidx, fieldId: 'url-entry' });
           return;
         }
         const key = parsed.href.replace(/\/$/, '').toLowerCase();

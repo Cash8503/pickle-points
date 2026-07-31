@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 
 DEFAULT_FETCH_CONCURRENCY = 5
 DEFAULT_PRICE_PER_PICKLE = 0.50
@@ -13,6 +14,7 @@ def default_config(app_dir):
             "fetch_concurrency": DEFAULT_FETCH_CONCURRENCY,
             "price_per_pickle": DEFAULT_PRICE_PER_PICKLE,
             "pickle_chip_value": DEFAULT_PICKLE_VALUE,
+            "show_unavailable_cards": False,
         },
         "tag_colors": {
             "POPULAR": {"bg": "#FFF0B2", "text": "#A07800"},
@@ -60,6 +62,10 @@ def validate_config(cfg):
             value = settings["pickle_chip_value"]
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 _fail("settings.pickle_chip_value", "must be an integer of 1 or greater")
+        if "show_unavailable_cards" in settings:
+            value = settings["show_unavailable_cards"]
+            if not isinstance(value, bool):
+                _fail("settings.show_unavailable_cards", "must be true or false")
 
     tag_colors = cfg.get("tag_colors", {})
     if "tag_colors" in cfg and not isinstance(tag_colors, dict):
@@ -97,17 +103,23 @@ def validate_config(cfg):
             if not isinstance(item, dict):
                 _fail(item_path, "must be an object")
             item_type = item.get("type", "manual")
-            if item_type not in {"manual", "smilemakers"}:
-                _fail(f"{item_path}.type", "must be 'manual' or 'smilemakers'")
-            if item_type == "smilemakers":
+            if item_type not in {"manual", "automatic", "smilemakers", "waytobe"}:
+                _fail(
+                    f"{item_path}.type",
+                    "must be 'manual' or 'automatic' (legacy 'smilemakers' and 'waytobe' are also accepted)",
+                )
+            if item_type in {"automatic", "smilemakers", "waytobe"}:
                 urls = item.get("urls", [])
                 if not isinstance(urls, list):
                     _fail(f"{item_path}.urls", "must be an array")
                 if not urls:
-                    _fail(f"{item_path}.urls", "must include at least one SmileMakers URL")
+                    _fail(f"{item_path}.urls", "must include at least one product URL")
                 for k, url in enumerate(urls):
                     if not isinstance(url, str) or not url.strip():
                         _fail(f"{item_path}.urls[{k}]", "must be a non-empty URL")
+                    parsed = urlparse(url.strip())
+                    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                        _fail(f"{item_path}.urls[{k}]", "must be a valid HTTP or HTTPS URL")
             else:
                 if "name" in item and not isinstance(item["name"], str):
                     _fail(f"{item_path}.name", "must be text")

@@ -22,19 +22,20 @@ from config import (audit_log, backup_config, delete_store_config,
 from config_schema import validate_config
 from order_render import render_order_tracker_html
 from preview_render import render_preview_html
-from services import (cache_entries, cache_entries_for_urls, clear_cache,
-                      fetch_smilemakers_product, get_cache_warm_status,
+from services import (AUTOMATIC_ITEM_TYPES, cache_entries,
+                      cache_entries_for_urls, clear_cache,
+                      fetch_vendor_product, get_cache_warm_status,
                       prefetch_new_urls, resolve_items_for_preview,
                       start_cache_refetch_urls, start_cache_warm)
 
 logger = logging.getLogger(__name__)
 
 
-def _smilemakers_urls(cfg):
+def _automatic_urls(cfg):
     urls = []
     for page in cfg.get("pages", []):
         for item in page.get("items", []):
-            if item.get("type") != "smilemakers":
+            if item.get("type") not in AUTOMATIC_ITEM_TYPES:
                 continue
             for url in item.get("urls") or []:
                 if url:
@@ -360,7 +361,7 @@ def register_routes(app):
         if not url:
             return jsonify({"error": "No URL provided"}), 400
         try:
-            name, desc, image, price, size_variants = fetch_smilemakers_product(url)
+            name, desc, image, price, size_variants = fetch_vendor_product(url)
             if not name and not image:
                 return jsonify({"error": "No product info found. Check the URL or try again."}), 502
             sizes = [v["value"] for v in size_variants if v.get("type") == "size"]
@@ -432,9 +433,9 @@ def register_routes(app):
             meta = get_store_metadata(num)
             stores.append({"num": num, **meta})
             cfgs.append(load_config(num))
-        smilemakers_urls = []
+        automatic_urls = []
         for cfg in cfgs:
-            smilemakers_urls.extend(_smilemakers_urls(cfg))
+            automatic_urls.extend(_automatic_urls(cfg))
         users = list_users()
         msgs  = get_flashed_messages(with_categories=True)
         user = get_user(user_id=session["user_id"])
@@ -445,7 +446,7 @@ def register_routes(app):
             stores=stores,
             users=users,
             messages=msgs,
-            cache_entries=cache_entries_for_urls(smilemakers_urls),
+            cache_entries=cache_entries_for_urls(automatic_urls),
             cache_warm_status=get_cache_warm_status(),
             dark_mode=dark_mode,
         )
@@ -491,7 +492,7 @@ def register_routes(app):
             flash("No cache URL provided.", "err")
         else:
             clear_cache(url)
-            name, _, image, _, _ = fetch_smilemakers_product(url)
+            name, _, image, _, _ = fetch_vendor_product(url)
             audit_log("refetch_cache_url", f"by={session.get('username')} url={url}")
             if request.headers.get("X-Pickle-Ajax") == "1":
                 return jsonify({"ok": bool(name or image)})
@@ -516,7 +517,7 @@ def register_routes(app):
         cfgs = [load_config(num) for num in store_nums]
         urls = []
         for cfg in cfgs:
-            urls.extend(_smilemakers_urls(cfg))
+            urls.extend(_automatic_urls(cfg))
         entries = cache_entries_for_urls(urls)
         warm = get_cache_warm_status()
         def _fmt(e):
@@ -559,13 +560,13 @@ def register_routes(app):
         cfgs = [load_config(num) for num in store_nums]
         urls = []
         for cfg in cfgs:
-            urls.extend(_smilemakers_urls(cfg))
+            urls.extend(_automatic_urls(cfg))
         rows = cache_entries_for_urls(urls)
         targets = [row["url"] for row in rows if row.get("configured") and row.get("status") in {"failed", "missing"}]
         if not targets:
             if request.headers.get("X-Pickle-Ajax") == "1":
                 return jsonify({"ok": True, "started": False, "message": "Nothing to refetch."})
-            flash("No failed or uncached SmileMakers URLs need refetching.", "ok")
+            flash("No failed or uncached product URLs need refetching.", "ok")
             return redirect(url_for("admin_dashboard"))
         started, state = start_cache_refetch_urls(targets, label="Refetch needed URLs")
         audit_log("refetch_needed_cache", f"by={session.get('username')} count={len(targets)}")

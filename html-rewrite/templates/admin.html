@@ -651,7 +651,7 @@ body.dark-mode .store-checklist {
 
   <!-- ── Cache (collapsed) ── -->
   <div class="section-header clickable" onclick="toggleCache()">
-    <div class="section-title">SmileMakers Cache</div>
+    <div class="section-title">Product Cache</div>
     <div class="section-count" id="cache-header-count">{{ cache_entries|length }} cached URL{{ 's' if cache_entries|length != 1 else '' }}</div>
     <span id="cache-toggle-icon" class="section-toggle">&#9654; Show</span>
   </div>
@@ -736,7 +736,7 @@ body.dark-mode .store-checklist {
       </div>
       <div id="cache-empty-wrap" {% if cache_entries %}style="display:none"{% endif %}>
         <div class="empty-state compact">
-          <p>No cached SmileMakers products yet.</p>
+          <p>No cached vendor products yet.</p>
           <small>Warm all stores or fetch products from the editor to populate this list.</small>
         </div>
       </div>
@@ -979,7 +979,7 @@ function cacheRefetchNeeded() {
   cachePost('/admin/cache/refetch-needed').then(startCachePolling);
 }
 function cacheClearAll() {
-  if (!confirm('Clear the entire SmileMakers cache?')) return;
+  if (!confirm('Clear the entire product cache?')) return;
   cachePost('/admin/cache/clear-all').then(pollCacheStatus);
 }
 function cacheClearUrl(url, btn) {

@@ -8,6 +8,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urljoin
 
 import requests
 
@@ -30,6 +31,7 @@ _APP_DIR       = os.path.dirname(os.path.abspath(__file__))
 _CACHE_DIR     = os.path.join(_APP_DIR, "cache")
 _MANIFEST_PATH = os.path.join(_CACHE_DIR, "smilemakers_manifest.json")
 CACHE_MAX_AGE  = 86_400  # 1 day in seconds
+AUTOMATIC_ITEM_TYPES = {"automatic", "smilemakers", "waytobe"}
 
 _SMILEMAKERS_CACHE: dict = {}  # url -> (name, desc, image, price, variants)
 _cache_times:       dict = {}  # url -> fetched_at timestamp
@@ -392,7 +394,7 @@ def _first_sentence(text):
         return text[:m.start() + 1].strip()
     return text[:75] if len(text) > 75 else text
 
-def fetch_smilemakers_product(url):
+def fetch_vendor_product(url):
     load_disk_cache()
     if url in _SMILEMAKERS_CACHE:
         return _SMILEMAKERS_CACHE[url]
@@ -418,20 +420,22 @@ def fetch_smilemakers_product(url):
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            def og(prop):
-                tag = soup.find("meta", property=prop)
+            def meta_content(key):
+                tag = soup.find("meta", property=key) or soup.find("meta", attrs={"name": key})
                 return tag["content"].strip() if tag and tag.get("content") else ""
 
-            name = og("og:title") or (soup.find("h1") or {}).get_text("").strip()
-            desc = og("og:description")
+            heading = soup.find("h1")
+            name = meta_content("og:title") or meta_content("twitter:title")
+            if not name and heading:
+                name = heading.get_text(" ", strip=True)
+            desc = meta_content("og:description") or meta_content("twitter:description")
             if not desc:
                 m = soup.find("meta", attrs={"name":"description"})
                 desc = m["content"].strip() if m and m.get("content") else ""
-            desc, size_variants = extract_size_variants(desc)
-            desc = _first_sentence(desc)
-            image_url = og("og:image")
+            size_variants = []
+            image_url = meta_content("og:image") or meta_content("twitter:image")
 
-            price = og("product:price:amount") or og("og:price:amount") or og("price")
+            price = meta_content("product:price:amount") or meta_content("og:price:amount") or meta_content("price")
             if not price:
                 m = soup.find("meta", attrs={"itemprop":"price"})
                 if m and m.get("content"): price = m["content"].strip()
@@ -442,27 +446,58 @@ def fetch_smilemakers_product(url):
                 m = soup.find(attrs={"itemprop":"price"})
                 if m:
                     price = m.get("content", m.get_text("")).strip()
-            if not price:
-                for script in soup.find_all("script", type="application/ld+json"):
-                    try:
-                        data = json.loads(script.string or "{}")
-                    except json.JSONDecodeError:
+            for script in soup.find_all("script", type="application/ld+json"):
+                try:
+                    data = json.loads(script.string or script.get_text() or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                candidates = data if isinstance(data, list) else [data]
+                expanded = []
+                for candidate in candidates:
+                    if isinstance(candidate, dict) and isinstance(candidate.get("@graph"), list):
+                        expanded.extend(candidate["@graph"])
+                    else:
+                        expanded.append(candidate)
+                for product in expanded:
+                    if not isinstance(product, dict):
                         continue
-                    if isinstance(data, dict) and "offers" in data:
-                        offers = data["offers"]
-                        if isinstance(offers, dict) and "price" in offers:
-                            price = str(offers["price"]); break
-                    elif isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict) and "offers" in item:
-                                offers = item["offers"]
-                                if isinstance(offers, dict) and "price" in offers:
-                                    price = str(offers["price"]); break
-                        if price: break
+                    product_type = product.get("@type", "")
+                    if isinstance(product_type, list):
+                        is_product = "Product" in product_type
+                    else:
+                        is_product = product_type == "Product"
+                    if not is_product:
+                        continue
+                    name = name or str(product.get("name") or "").strip()
+                    desc = desc or str(product.get("description") or "").strip()
+                    product_image = product.get("image")
+                    if isinstance(product_image, list):
+                        product_image = product_image[0] if product_image else ""
+                    if isinstance(product_image, dict):
+                        product_image = product_image.get("url") or product_image.get("contentUrl")
+                    image_url = image_url or str(product_image or "").strip()
+                    offers = product.get("offers")
+                    if isinstance(offers, list):
+                        offers = offers[0] if offers else {}
+                    if not price and isinstance(offers, dict):
+                        price = offers.get("price") or offers.get("lowPrice")
+                    break
+
+            if not image_url:
+                image_tag = soup.find(attrs={"itemprop": "image"})
+                if image_tag:
+                    image_url = image_tag.get("content") or image_tag.get("src") or ""
+            if image_url:
+                image_url = urljoin(getattr(resp, "url", url) or url, image_url)
+
+            desc, size_variants = extract_size_variants(desc)
+            desc = _first_sentence(desc)
 
             if price:
-                price = re.sub(r"[^0-9.]", "", str(price))
-            price = float(price) if price else None
+                price_match = re.search(r"\d[\d,]*(?:\.\d{1,2})?", str(price))
+                price = float(price_match.group(0).replace(",", "")) if price_match else None
+            else:
+                price = None
             result = (name, desc, image_url, price, size_variants)
             break
         except requests.exceptions.Timeout:
@@ -486,6 +521,10 @@ def fetch_smilemakers_product(url):
     else:
         _persist_failure(url, failure_reason)
     return result
+
+
+# Backward-compatible name used by API imports and older callers.
+fetch_smilemakers_product = fetch_vendor_product
 
 def extract_dominant_colors(image_url, n=5):
     if not image_url or not _PIL_AVAILABLE:
@@ -530,7 +569,7 @@ def price_to_pickles(price, per_pickle=None, round_up_to=None):
     return pickles
 
 def resolve_items_for_preview(cfg):
-    """Fetch all SmileMakers items and return fully resolved page data.
+    """Fetch all vendor-backed items and return fully resolved page data.
 
     NOTE: _SMILEMAKERS_CACHE stores only raw product data (name, desc, image,
     price, size_variants) — never resolved pickle counts.  per_pickle is read
@@ -539,6 +578,7 @@ def resolve_items_for_preview(cfg):
     """
     s            = cfg.get("settings", {})
     concurrency  = s.get("fetch_concurrency", DEFAULT_FETCH_CONCURRENCY)
+    show_unavailable = bool(s.get("show_unavailable_cards", False))
     # Read fresh from config every render — do NOT use a module-level constant here.
     per_pickle   = float(s.get("price_per_pickle", s.get("price_per_point", DEFAULT_PRICE_PER_PICKLE)))
     pickle_value = int(s.get("pickle_chip_value", s.get("pickle_pickle_value", s.get("pickle_point_value", DEFAULT_PICKLE_VALUE))))
@@ -551,7 +591,7 @@ def resolve_items_for_preview(cfg):
         resolved_items = []
         pending = []  # (index, item_cfg)
         for i, item in enumerate(page.get("items", [])):
-            if item.get("type") == "smilemakers":
+            if item.get("type") in AUTOMATIC_ITEM_TYPES:
                 pending.append((i, item))
                 resolved_items.append(None)
             else:
@@ -581,25 +621,43 @@ def resolve_items_for_preview(cfg):
                         "name":"","desc":"","pickles":0,
                         "tag":item.get("tag"),"image":"","variants":[],"price":None,
                         "uniform_approved": item.get("uniform_approved", False),
+                        "_unavailable": True,
                     }
-                fn, fd, fi, fp, fetched_size_variants = fetch_smilemakers_product(urls[0])
+                fn, fd, fi, fp, fetched_size_variants = fetch_vendor_product(urls[0])
                 variant_type = item.get("variant_type", "color")
                 image_url = item.get("image") or fi
                 page_price = item.get("price") or fp
+
+                if not (fn or fi):
+                    pickles = item.get("pickles", item.get("points"))
+                    if pickles is None and page_price is not None:
+                        pickles = price_to_pickles(page_price, per_pickle=per_pickle, round_up_to=pickle_value)
+                    desc, size_variants = extract_size_variants(item.get("desc", "") or "")
+                    return idx, {
+                        "name": item.get("name") or "",
+                        "desc": desc,
+                        "pickles": pickles or 0,
+                        "tag": item.get("tag"),
+                        "image": image_url,
+                        "variants": _merge_variants(item.get("variants", []), size_variants),
+                        "price": page_price,
+                        "uniform_approved": item.get("uniform_approved", False),
+                        "_unavailable": True,
+                    }
 
                 if variant_type == "sex":
                     variants = []
                     cleaned = strip_sex_words(fn)
                     if cleaned: fn = cleaned
                     for vurl in urls:
-                        vn, _, _, _, _ = fetch_smilemakers_product(vurl)
+                        vn, _, _, _, _ = fetch_vendor_product(vurl)
                         sex_label = _detect_sex_label(vn)
                         if sex_label:
                             variants.append({"type":"sex","value":sex_label})
                 elif len(urls) > 1:
                     variants = []
                     for vurl in urls:
-                        _, _, vimg, _, _ = fetch_smilemakers_product(vurl)
+                        _, _, vimg, _, _ = fetch_vendor_product(vurl)
                         if vimg:
                             cols = extract_dominant_colors(vimg, 1)
                             if cols:
@@ -629,6 +687,7 @@ def resolve_items_for_preview(cfg):
                     "variants": variants,
                     "price":    page_price,
                     "uniform_approved": item.get("uniform_approved", False),
+                    "_unavailable": False,
                 }
 
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -636,6 +695,12 @@ def resolve_items_for_preview(cfg):
                 for future in as_completed(futures):
                     idx, resolved = future.result()
                     resolved_items[idx] = resolved
+
+        if not show_unavailable:
+            resolved_items = [
+                item for item in resolved_items
+                if item is not None and not item.get("_unavailable", False)
+            ]
 
         resolved_pages.append({**page, "items": resolved_items})
 
@@ -652,7 +717,7 @@ def _collect_smilemakers_urls(cfgs, include_cached=False):
     for cfg in cfgs:
         for page in cfg.get("pages", []):
             for item in page.get("items", []):
-                if item.get("type") != "smilemakers":
+                if item.get("type") not in AUTOMATIC_ITEM_TYPES:
                     continue
                 for url in item.get("urls") or []:
                     if not url or url in seen:
@@ -794,7 +859,7 @@ def prefetch_new_urls(cfg):
     urls = []
     for page in cfg.get("pages", []):
         for item in page.get("items", []):
-            if item.get("type") == "smilemakers":
+            if item.get("type") in AUTOMATIC_ITEM_TYPES:
                 for u in (item.get("urls") or []):
                     if u and u not in _SMILEMAKERS_CACHE:
                         urls.append(u)
