@@ -46,6 +46,19 @@ def _color_swatches(variants):
     return swatches[:8]
 
 
+def _style_summary(variants, limit=5):
+    styles = []
+    for variant in variants or []:
+        if variant.get("type") != "style":
+            continue
+        value = str(variant.get("value", "")).strip()
+        if value and value not in styles:
+            styles.append(value)
+    if len(styles) <= limit:
+        return ", ".join(styles)
+    return ", ".join(styles[:limit]) + f" +{len(styles) - limit} more"
+
+
 def _owed_pickles(item, pickle_value):
     pickles = item.get("pickles", 0) or 0
     try:
@@ -81,6 +94,7 @@ def _item_sheets(pages, per_pickle, pickle_value):
                 "section": section,
                 "item": item.get("name", ""),
                 "size_hint": _size_summary(variants),
+                "style_hint": _style_summary(variants),
                 "color_swatches": _color_swatches(variants),
                 "cost": cost,
                 "owed": owed if owed else "",
@@ -95,6 +109,7 @@ def _blank_sheet():
         "section": "",
         "item": "",
         "size_hint": "",
+        "style_hint": "",
         "color_swatches": [],
         "cost": "",
         "owed": "",

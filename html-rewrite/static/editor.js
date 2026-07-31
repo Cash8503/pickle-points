@@ -12,10 +12,14 @@ let itemFilterText = '';
 let userDarkMode = !!window.PICKLE_USER_DARK_MODE;
 let hasUnsavedChanges = false;
 let saveInFlight = false;
-const AUTOMATIC_ITEM_TYPES = new Set(['automatic', 'smilemakers', 'waytobe']);
+const URL_ITEM_TYPES = new Set(['automatic', 'collection', 'smilemakers', 'waytobe']);
 
-function isAutomaticItem(item) {
-  return !!item && AUTOMATIC_ITEM_TYPES.has(item.type);
+function isUrlItem(item) {
+  return !!item && URL_ITEM_TYPES.has(item.type);
+}
+
+function isCollectionItem(item) {
+  return !!item && item.type === 'collection';
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -473,9 +477,10 @@ function renderItems() {
     });
 
     const badge = document.createElement('span');
-    const automatic = isAutomaticItem(item);
-    badge.className = 'item-badge ' + (automatic ? 'badge-sm' : 'badge-man');
-    badge.textContent = automatic ? 'A' : 'M';
+    const urlItem = isUrlItem(item);
+    const collection = isCollectionItem(item);
+    badge.className = 'item-badge ' + (urlItem ? 'badge-sm' : 'badge-man');
+    badge.textContent = collection ? 'C' : (urlItem ? 'A' : 'M');
 
     const name = document.createElement('span');
     name.className = 'item-name';
@@ -487,7 +492,7 @@ function renderItems() {
 }
 
 function itemListLabel(item) {
-  if (isAutomaticItem(item)) {
+  if (isUrlItem(item)) {
     const u = (item.urls || [])[0] || '?';
     const slug = u.replace(/\/$/, '').split('/').pop();
     const extra = (item.urls || []).length > 1 ? ` +${item.urls.length - 1}` : '';
@@ -529,6 +534,19 @@ function addAutomaticItem() {
   buildItemEditor();
   markDirty();
   setStatus('Add a product URL to finish this item', 'warn');
+  setTimeout(() => document.getElementById('url-entry')?.focus(), 0);
+}
+
+function addCollectionItem() {
+  const page = currentPage();
+  if (!page) return;
+  page.items = page.items || [];
+  page.items.push({ type: 'collection', urls: [] });
+  itemIdx = page.items.length - 1;
+  renderItems();
+  buildItemEditor();
+  markDirty();
+  setStatus('Add the product URLs that belong to this collection', 'warn');
   setTimeout(() => document.getElementById('url-entry')?.focus(), 0);
 }
 
@@ -643,7 +661,7 @@ function buildItemEditor() {
   ed.style.display = 'block';
   ed.innerHTML = '';
 
-  if (isAutomaticItem(item)) {
+  if (isUrlItem(item)) {
     buildAutomaticEditor(ed, item);
   } else {
     buildManualEditor(ed, item);
@@ -652,8 +670,9 @@ function buildItemEditor() {
 
 function buildAutomaticEditor(ed, item) {
   const tags = ['', ...Object.keys(cfg.tag_colors || {})];
+  const collection = isCollectionItem(item);
   ed.innerHTML = `
-    <div class="editor-title">Automatic Item</div>
+    <div class="editor-title">${collection ? 'Collection Item' : 'Automatic Item'}</div>
     <div class="ed-row">
       <label>URLs</label>
       <div style="flex:1">
@@ -668,7 +687,9 @@ function buildAutomaticEditor(ed, item) {
           <button onclick="urlReplace()">Replace</button>
           <button onclick="urlRemove()">Remove</button>
         </div>
-        <div class="hint">Press Enter or click Add URL. The item saves after the URL is committed.</div>
+        <div class="hint">${collection
+          ? 'Add one URL per style. Names and thumbnail images are detected automatically.'
+          : 'Press Enter or click Add URL. The item saves after the URL is committed.'}</div>
         <div id="fetch-status"></div>
         <div id="fetch-errors">${fetchErrorsHtml(item)}</div>
       </div>
@@ -687,7 +708,9 @@ function buildAutomaticEditor(ed, item) {
         <option value="weekend" ${item.uniform_approved==='weekend'?'selected':''}>Weekends Only</option>
       </select>
     </div>
-    <div class="overrides-note">Sex, color, and size variants are detected automatically from the linked products.</div>
+    <div class="overrides-note">${collection
+      ? 'Each linked product becomes a named style in one compact collection card. The highest detected price is used unless Pickles is overridden.'
+      : 'Sex, color, and size variants are detected automatically from the linked products.'}</div>
     <hr class="ed-sep">
     <div class="overrides-note">Overrides &mdash; blank = auto from URL</div>
     <div class="ed-row">
@@ -1435,7 +1458,7 @@ function validateAutomaticUrls() {
   const seen = new Map();
   (cfg.pages || []).forEach((page, pidx) => {
     (page.items || []).forEach((item, iidx) => {
-      if (!isAutomaticItem(item)) return;
+      if (!isUrlItem(item)) return;
       const label = `Page ${pidx + 1}, item ${iidx + 1}`;
       const urls = item.urls || [];
       if (!urls.length) {

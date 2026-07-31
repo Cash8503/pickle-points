@@ -31,7 +31,7 @@ _APP_DIR       = os.path.dirname(os.path.abspath(__file__))
 _CACHE_DIR     = os.path.join(_APP_DIR, "cache")
 _MANIFEST_PATH = os.path.join(_CACHE_DIR, "smilemakers_manifest.json")
 CACHE_MAX_AGE  = 86_400  # 1 day in seconds
-AUTOMATIC_ITEM_TYPES = {"automatic", "smilemakers", "waytobe"}
+AUTOMATIC_ITEM_TYPES = {"automatic", "collection", "smilemakers", "waytobe"}
 
 _SMILEMAKERS_CACHE: dict = {}  # url -> (name, desc, image, price, variants)
 _cache_times:       dict = {}  # url -> fetched_at timestamp
@@ -386,6 +386,54 @@ def _merge_variants(*groups):
                 seen.add(k); merged.append(v)
     return merged
 
+
+_COLLECTION_WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z0-9]+)?")
+
+
+def _collection_name_and_labels(names):
+    """Build a shared collection title and concise labels from product names."""
+    all_token_groups = [_COLLECTION_WORD_RE.findall(name or "") for name in names]
+    token_groups = [tokens for tokens in all_token_groups if tokens]
+    if not token_groups:
+        return "Style Collection", ["" for _ in names]
+
+    common = set(token.lower() for token in token_groups[0])
+    for tokens in token_groups[1:]:
+        common.intersection_update(token.lower() for token in tokens)
+
+    common_tokens = []
+    seen_common = set()
+    for token in token_groups[0]:
+        key = token.lower()
+        if key in common and key not in seen_common:
+            common_tokens.append(token)
+            seen_common.add(key)
+
+    if common_tokens:
+        title_words = [token.title() for token in common_tokens]
+        last = title_words[-1]
+        if not last.lower().endswith("s"):
+            if last.lower().endswith(("ch", "sh", "x", "z")):
+                last += "es"
+            elif last.lower().endswith("y") and len(last) > 1:
+                last = last[:-1] + "ies"
+            else:
+                last += "s"
+            title_words[-1] = last
+        title = " ".join(title_words)
+    else:
+        title = "Style Collection"
+
+    labels = []
+    for tokens in all_token_groups:
+        if not tokens:
+            labels.append("")
+            continue
+        label_tokens = [token for token in tokens if token.lower() not in common]
+        label = " ".join(label_tokens or tokens).title()
+        labels.append(label)
+    return title, labels
+
 def _first_sentence(text):
     text = re.sub(r'<[^>]+>', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
@@ -659,6 +707,89 @@ def resolve_items_for_preview(cfg):
                         "uniform_approved": item.get("uniform_approved", False),
                         "_unavailable": True,
                     }
+
+                if item.get("type") == "collection":
+                    fetched = [
+                        (url, fetch_vendor_product(url))
+                        for url in urls
+                    ]
+                    available = [
+                        (url, product) for url, product in fetched
+                        if product[0] or product[2]
+                    ]
+                    if not available:
+                        pickles = item.get("pickles", item.get("points"))
+                        price = item.get("price")
+                        if pickles is None and price is not None:
+                            pickles = price_to_pickles(price, per_pickle=per_pickle, round_up_to=pickle_value)
+                        desc, size_variants = extract_size_variants(item.get("desc", "") or "")
+                        return idx, {
+                            "type": "collection",
+                            "name": item.get("name") or "",
+                            "desc": desc,
+                            "pickles": pickles or 0,
+                            "tag": item.get("tag"),
+                            "image": item.get("image") or "",
+                            "variants": _merge_variants(item.get("variants", []), size_variants),
+                            "collection_variants": [],
+                            "price": price,
+                            "uniform_approved": item.get("uniform_approved", False),
+                            "_unavailable": True,
+                        }
+
+                    product_names = [product[0] for _, product in available]
+                    auto_name, labels = _collection_name_and_labels(product_names)
+                    collection_variants = []
+                    for position, (url, product) in enumerate(available):
+                        product_name, _, product_image, product_price, _ = product
+                        detected_label = labels[position] if position < len(labels) else ""
+                        label = detected_label or product_name or f"Style {position + 1}"
+                        collection_variants.append({
+                            "type": "style",
+                            "value": label,
+                            "name": product_name,
+                            "image": product_image,
+                            "url": url,
+                            "price": product_price,
+                        })
+
+                    prices = [
+                        product[3] for _, product in available
+                        if product[3] is not None
+                    ]
+                    price_override = item.get("price")
+                    page_price = price_override if price_override is not None else (max(prices) if prices else None)
+                    pickles = item.get("pickles", item.get("points"))
+                    if pickles is None and page_price is not None:
+                        pickles = price_to_pickles(page_price, per_pickle=per_pickle, round_up_to=pickle_value)
+
+                    desc_override = item.get("desc")
+                    auto_desc = " • ".join(variant["value"] for variant in collection_variants)
+                    desc, size_variants = extract_size_variants(
+                        desc_override if desc_override is not None else auto_desc
+                    )
+                    image_override = item.get("image")
+                    first_image = next(
+                        (variant["image"] for variant in collection_variants if variant.get("image")),
+                        "",
+                    )
+                    return idx, {
+                        "type": "collection",
+                        "name": item.get("name") or auto_name,
+                        "desc": desc,
+                        "pickles": pickles or 0,
+                        "tag": item.get("tag"),
+                        "image": image_override or first_image,
+                        "variants": _merge_variants(
+                            item.get("variants", []), collection_variants, size_variants,
+                        ),
+                        "collection_variants": collection_variants,
+                        "_collection_image_override": bool(image_override),
+                        "price": page_price,
+                        "uniform_approved": item.get("uniform_approved", False),
+                        "_unavailable": False,
+                    }
+
                 primary_product = fetch_vendor_product(urls[0])
                 fn, fd, fi, fp, _ = primary_product
                 image_url = item.get("image") or fi

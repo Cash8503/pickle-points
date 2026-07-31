@@ -12,7 +12,9 @@ import sys
 import api
 import services
 from config import normalize_automatic_items
+from config_schema import validate_config
 from main import app
+from order_render import _item_sheets
 from preview_render import render_preview_html
 
 
@@ -307,6 +309,7 @@ def test_editor_has_no_admin_cache_controls(client):
     assert b"Warm All Stores" not in response.data
     assert b"Clear All Cache" not in response.data
     assert b"+ Automatic" in response.data
+    assert b"+ Collection" in response.data
     assert b"+ SmileMakers" not in response.data
     assert b"+ WayToBe" not in response.data
     assert b"Show unavailable cards" in response.data
@@ -315,6 +318,8 @@ def test_editor_has_no_admin_cache_controls(client):
     script = client.get("/static/editor.js?v=test")
     assert script.status_code == 200
     assert b"function addAutomaticItem()" in script.data
+    assert b"function addCollectionItem()" in script.data
+    assert b"Each linked product becomes a named style in one compact collection card" in script.data
     assert b"Add a product URL to finish this item" in script.data
     assert b"await saveConfig({ reloadPreview: false })" in script.data
     assert b"await fetchAndApplyUrl(item, u, 'Checking product')" in script.data
@@ -475,6 +480,62 @@ def test_automatic_sex_and_color_variants():
     assert {("size", "SM"), ("size", "M"), ("size", "L"), ("size", "XL")} <= variant_pairs
 
 
+def test_small_item_collection():
+    urls = [
+        "https://shop.example.test/brass-happy-meal-pin",
+        "https://shop.example.test/brass-ice-cream-cone-pin",
+        "https://shop.example.test/brass-cup-pin",
+        "https://shop.example.test/brass-big-mac-pin",
+        "https://shop.example.test/brass-fry-pin",
+        "https://shop.example.test/unreachable-pin",
+    ]
+    products = {
+        urls[0]: ("BRASS HAPPY MEAL PIN", "", "image-happy", 2.49, []),
+        urls[1]: ("BRASS ICE CREAM CONE PIN", "", "image-cone", 2.49, []),
+        urls[2]: ("BRASS CUP PIN", "", "image-cup", 2.49, []),
+        urls[3]: ("BRASS BIG MAC PIN", "", "image-burger", 2.99, []),
+        urls[4]: ("BRASS FRY PIN", "", "image-fries", 2.49, []),
+        urls[5]: ("", "", "", None, []),
+    }
+    cfg = {
+        **TEST_CONFIG,
+        "tag_colors": {"POPULAR": {"bg": "#FFF0B2", "text": "#A07800"}},
+        "pages": [{
+            "title": "Small collections",
+            "items": [{"type": "collection", "urls": urls, "tag": "POPULAR"}],
+            "layout": {"cols": 4},
+        }],
+    }
+    validate_config(cfg)
+    original_fetch = services.fetch_vendor_product
+    try:
+        services.fetch_vendor_product = lambda url: products[url]
+        pages, per_pickle, pickle_value = services.resolve_items_for_preview(cfg)
+    finally:
+        services.fetch_vendor_product = original_fetch
+
+    item = pages[0]["items"][0]
+    styles = [variant["value"] for variant in item["variants"] if variant["type"] == "style"]
+    assert item["name"] == "Brass Pins"
+    assert styles == ["Happy Meal", "Ice Cream Cone", "Cup", "Big Mac", "Fry"]
+    assert item["desc"] == "Happy Meal • Ice Cream Cone • Cup • Big Mac • Fry"
+    assert item["price"] == 2.99
+    assert item["pickles"] == 10
+    assert len(item["collection_variants"]) == 5
+    assert item["_unavailable"] is False
+
+    with app.app_context():
+        rendered = render_preview_html(pages, per_pickle, pickle_value, cfg["tag_colors"])
+    assert 'class="collection-collage"' in rendered
+    assert 'class="collection-extra-count"' in rendered
+    assert ">+1</span>" in rendered
+    assert ">5 STYLES</span>" in rendered
+    assert ">POPULAR</span>" in rendered
+
+    sheets = _item_sheets(pages, per_pickle, pickle_value)
+    assert sheets[0]["style_hint"] == "Happy Meal, Ice Cream Cone, Cup, Big Mac, Fry"
+
+
 def test_preview_frame_renders(client):
     seed_session(client)
     with patched(load_config=lambda store_num: TEST_CONFIG):
@@ -541,6 +602,7 @@ def run_tests():
     runner.check("legacy vendor items migrate to automatic", test_legacy_item_migration)
     runner.check("automatic item parses product JSON-LD", test_automatic_page_parsing)
     runner.check("automatic items detect sex and color variants", test_automatic_sex_and_color_variants)
+    runner.check("small item collections detect named styles", test_small_item_collection)
     runner.check("unavailable automatic cards hide or show", test_unavailable_automatic_cards)
     runner.check("preview-frame renders a test config", lambda: test_preview_frame_renders(client))
     runner.check("order tracker renders printable order sheet", lambda: test_order_tracker_renders(client))

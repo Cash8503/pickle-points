@@ -103,12 +103,13 @@ def validate_config(cfg):
             if not isinstance(item, dict):
                 _fail(item_path, "must be an object")
             item_type = item.get("type", "manual")
-            if item_type not in {"manual", "automatic", "smilemakers", "waytobe"}:
+            if item_type not in {"manual", "automatic", "collection", "smilemakers", "waytobe"}:
                 _fail(
                     f"{item_path}.type",
-                    "must be 'manual' or 'automatic' (legacy 'smilemakers' and 'waytobe' are also accepted)",
+                    "must be 'manual', 'automatic', or 'collection' "
+                    "(legacy 'smilemakers' and 'waytobe' are also accepted)",
                 )
-            if item_type in {"automatic", "smilemakers", "waytobe"}:
+            if item_type in {"automatic", "collection", "smilemakers", "waytobe"}:
                 urls = item.get("urls", [])
                 if not isinstance(urls, list):
                     _fail(f"{item_path}.urls", "must be an array")

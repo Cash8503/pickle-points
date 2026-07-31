@@ -64,7 +64,8 @@ def _bubble_positions(page_idx, seed_extra=0):
 
 def _variant_swatches_html(variants):
     """Render variant swatches as HTML elements."""
-    style_vs = [v for v in variants if v.get('type') != 'size']
+    collection_vs = [v for v in variants if v.get('type') == 'style']
+    style_vs = [v for v in variants if v.get('type') not in {'size', 'style'}]
     size_vs  = [v for v in variants if v.get('type') == 'size']
     parts = []
     if style_vs:
@@ -93,7 +94,52 @@ def _variant_swatches_html(variants):
             f'border-radius:4pt;padding:0.5pt 4pt;font-size:5pt;font-weight:700;'
             f'white-space:nowrap;color:#444">{label}</span>'
         )
+    if collection_vs:
+        count = len(collection_vs)
+        label = f'{count} STYLE' if count == 1 else f'{count} STYLES'
+        parts.append(
+            f'<span class="collection-style-count" style="margin:0 auto;flex-shrink:0;'
+            f'background:#f8f8f8;border:0.4pt solid #bbb;border-radius:4pt;'
+            f'padding:0.5pt 4pt;font-size:5pt;font-weight:700;white-space:nowrap;'
+            f'color:#444">{label}</span>'
+        )
     return ''.join(parts)
+
+
+def _collection_collage_html(collection_variants, approved_html):
+    images = [
+        variant.get('image') for variant in (collection_variants or [])
+        if variant.get('image')
+    ]
+    if not images:
+        return ''
+    cells = ''.join(
+        f'<span style="display:flex;align-items:center;justify-content:center;overflow:hidden;'
+        f'background:#fff;border:0.35pt solid #eee;border-radius:2pt">'
+        f'<img src="{image}" alt="" style="width:100%;height:100%;object-fit:contain;display:block">'
+        f'</span>'
+        for image in images[:4]
+    )
+    extra = max(0, len(collection_variants or []) - 4)
+    extra_html = (
+        f'<span class="collection-extra-count" style="position:absolute;right:-2pt;top:-3pt;'
+        f'min-width:11pt;height:11pt;padding:0 2pt;border-radius:6pt;background:#1A1A1A;'
+        f'color:#fff;border:1pt solid #fff;display:flex;align-items:center;justify-content:center;'
+        f'font-size:5pt;font-weight:800;box-sizing:border-box">+{extra}</span>'
+        if extra else ''
+    )
+    approved_overlay = (
+        f'<span class="uniform-marker-overlay" style="position:absolute;right:-1pt;bottom:-1pt;'
+        f'display:flex;align-items:center;justify-content:center;'
+        f'filter:drop-shadow(0 0.8pt 1.2pt rgba(0,0,0,.24))">{approved_html}</span>'
+        if approved_html else ''
+    )
+    return (
+        f'<span class="collection-collage" style="float:right;width:50pt;height:50pt;'
+        f'margin:0 0 4pt 7pt;display:grid;grid-template-columns:repeat(2,1fr);'
+        f'grid-template-rows:repeat(2,1fr);gap:1pt;position:relative">'
+        f'{cells}{extra_html}{approved_overlay}</span>'
+    )
 
 def _tag_badge_html(tag, tag_colors):
     if not tag or tag not in tag_colors:
@@ -410,6 +456,7 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
             tag      = item.get('tag')
             image    = item.get('image', '')
             variants = item.get('variants', [])
+            collection_variants = item.get('collection_variants', [])
             approved = item.get('uniform_approved', False)
             unavailable = bool(item.get('_unavailable', False))
 
@@ -438,6 +485,8 @@ def render_preview_html(pages, per_pickle, pickle_value, tag_colors):
                 f'{img_html}{image_approved_html}</span>'
                 if image else ''
             )
+            if collection_variants and not item.get('_collection_image_override'):
+                floating_img_html = _collection_collage_html(collection_variants, approved_html)
             unavailable_html = (
                 '<div class="unavailable-card-label" '
                 'style="position:absolute;z-index:20;left:-20%;top:50%;width:140%;'

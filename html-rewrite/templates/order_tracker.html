@@ -448,6 +448,10 @@
                                         <span
                                             >Sizes: {{ sheet.size_hint }}</span
                                         >
+                                        {% endif %} {% if sheet.style_hint %}
+                                        <span
+                                            >Styles: {{ sheet.style_hint }}</span
+                                        >
                                         {% endif %}
                                     </div>
                                     {% else %}
