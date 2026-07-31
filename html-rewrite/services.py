@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -423,15 +423,25 @@ def fetch_vendor_product(url):
     load_disk_cache()
     if url in _SMILEMAKERS_CACHE:
         return _SMILEMAKERS_CACHE[url]
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-    }
+    hostname = (urlparse(url).hostname or "").lower()
+    is_fresh_fashions = (
+        hostname == "freshfashionsandmore.com"
+        or hostname.endswith(".freshfashionsandmore.com")
+    )
+    if is_fresh_fashions:
+        # This storefront stalls requests that impersonate a full Chrome browser,
+        # while its server-rendered product HTML responds normally to a minimal UA.
+        headers = {"User-Agent": "Mozilla/5.0", "Accept": "text/html,*/*;q=0.8"}
+    else:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+        }
     try:
         from bs4 import BeautifulSoup
     except ImportError:
@@ -439,9 +449,10 @@ def fetch_vendor_product(url):
 
     result = ("", "", "", None, [])
     failure_reason = "Fetch returned no product data"
-    for attempt in range(1, 4):
+    max_attempts = 2
+    for attempt in range(1, max_attempts + 1):
         try:
-            resp = requests.get(url, headers=headers, timeout=20)
+            resp = requests.get(url, headers=headers, timeout=(5, 12))
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -527,8 +538,8 @@ def fetch_vendor_product(url):
             break
         except requests.exceptions.Timeout:
             failure_reason = "Request timed out"
-            if attempt < 3:
-                time.sleep(1); continue
+            if attempt < max_attempts:
+                time.sleep(0.5); continue
         except requests.exceptions.RequestException as exc:
             failure_reason = str(exc)
             logger.error("Fetch failed for %s: %s", url, exc)

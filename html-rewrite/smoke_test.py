@@ -318,6 +318,7 @@ def test_editor_has_no_admin_cache_controls(client):
     assert b"Add a product URL to finish this item" in script.data
     assert b"await saveConfig({ reloadPreview: false })" in script.data
     assert b"await fetchAndApplyUrl(item, u, 'Checking product')" in script.data
+    assert b"Product fetch failed (HTTP ${r.status})" in script.data
 
 
 def test_legacy_item_migration():
@@ -339,16 +340,16 @@ def test_legacy_item_migration():
 
 
 def test_automatic_page_parsing():
-    url = "https://shop.example.test/products/dynamic-item"
+    url = "https://www.freshfashionsandmore.com/Pixel-Print-Long-Sleeve-T-Shirt"
     html = """
     <html><head>
-      <meta property="og:description" content="DetailsDynamic Jacket" />
+      <meta property="og:description" content="DetailsPixel Print Long Sleeve T-Shirt" />
       <script type="application/ld+json">
         {"@context":"https://schema.org","@graph":[
-          {"@type":"Product","name":"Dynamic Jacket",
-           "description":"Sizes: S-XL. A lightweight jacket.",
-           "image":"/images/jacket.png","offers":{"priceSpecification":
-             {"price":12.50,"minPrice":12.50,"maxPrice":18.50}}}
+          {"@type":"Product","name":"Pixel Print Long Sleeve T-Shirt",
+           "description":"Super soft 50/50 cotton/poly blend long sleeve T-shirt Screened logos on left chest and down left sleeve. Unisex sizes S-3X",
+           "image":"/Images/Product Images/1PIX_01.jpg","offers":{"priceSpecification":
+             {"price":12.99,"minPrice":12.99,"maxPrice":15.99}}}
         ]}
       </script>
     </head><body></body></html>
@@ -366,9 +367,15 @@ def test_automatic_page_parsing():
     original_get = services.requests.get
     original_load = services.load_disk_cache
     original_persist = services._persist_entry
+    request_options = {}
+
+    def fake_get(request_url, **kwargs):
+        request_options.update(kwargs)
+        return FakeResponse(html, url)
+
     try:
         services._SMILEMAKERS_CACHE.pop(url, None)
-        services.requests.get = lambda *args, **kwargs: FakeResponse(html, url)
+        services.requests.get = fake_get
         services.load_disk_cache = lambda: None
         services._persist_entry = lambda *args, **kwargs: None
         name, desc, image, price, sizes = services.fetch_vendor_product(url)
@@ -378,11 +385,13 @@ def test_automatic_page_parsing():
         services._persist_entry = original_persist
         services._SMILEMAKERS_CACHE.pop(url, None)
 
-    assert name == "Dynamic Jacket"
-    assert desc == "A lightweight jacket."
-    assert image == "https://shop.example.test/images/jacket.png"
-    assert price == 12.50
-    assert [variant["value"] for variant in sizes] == ["SM", "M", "L", "XL"]
+    assert name == "Pixel Print Long Sleeve T-Shirt"
+    assert desc == "Super soft 50/50 cotton/poly blend long sleeve T-shirt Screened logos on left chest and down left sleeve."
+    assert image == "https://www.freshfashionsandmore.com/Images/Product Images/1PIX_01.jpg"
+    assert price == 12.99
+    assert [variant["value"] for variant in sizes] == ["SM", "M", "L", "XL", "2XL", "3XL"]
+    assert request_options["headers"]["User-Agent"] == "Mozilla/5.0"
+    assert request_options["timeout"] == (5, 12)
 
 
 def test_unavailable_automatic_cards():

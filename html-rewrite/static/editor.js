@@ -1224,10 +1224,21 @@ async function fetchAndApplyUrl(item, u, label) {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({url: u})
     });
-    const d = await r.json();
-    if (d.error) {
-      recordFetchError(item, u, d.error);
-      if (statusEl) statusEl.textContent = 'Error: ' + d.error;
+    const responseText = await r.text();
+    let d = {};
+    let parsedJson = false;
+    try {
+      d = responseText ? JSON.parse(responseText) : {};
+      parsedJson = !!responseText;
+    } catch(e) {
+      d = {};
+    }
+    if (!r.ok || !parsedJson || d.error) {
+      const message = d.error || (
+        r.ok ? 'Product fetch returned an invalid response' : `Product fetch failed (HTTP ${r.status})`
+      );
+      recordFetchError(item, u, message);
+      if (statusEl) statusEl.textContent = 'Error: ' + message;
       return false;
     }
     clearFetchError(item, u);
@@ -1245,8 +1256,9 @@ async function fetchAndApplyUrl(item, u, label) {
     if (statusEl) statusEl.textContent = `Fetched OK  $${d.price ? d.price.toFixed(2) : '?'}${sizes}`;
     return true;
   } catch(e) {
-    recordFetchError(item, u, 'Network error');
-    if (statusEl) statusEl.textContent = 'Network error';
+    const message = 'Could not reach the product fetch API';
+    recordFetchError(item, u, message);
+    if (statusEl) statusEl.textContent = message;
     return false;
   }
 }
